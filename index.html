@@ -6,6 +6,17 @@
   <title>ヤーギ シミュレーター</title>
 
   <style>
+
+    /*
+      =========================================================
+        CSS設定メモ
+      =========================================================
+      ・px      : 画面上の大きさ/余白/位置を指定します。
+      ・rgba    : 色と透明度です。最後の値 0〜1 が透明度です。
+      ・z-index : 数字が大きいほど手前に表示されます。
+      ・grid-column / grid-row : 右下アクションボタンの並び順を決めます。
+      ・@media  : スマホなど画面幅が狭い時だけ反映される設定です。
+    */
     html,
     body {
       margin: 0;
@@ -284,6 +295,7 @@
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     }
 
+    /* 右下アクションボタン全体の配置です。 */
     #actionButtons {
       position: absolute;
       right: 18px;
@@ -311,30 +323,35 @@
       background: white;
     }
 
+    /* JUMPボタンの位置と色です。grid-row/columnで並びを変えられます。 */
     #btnJump {
       grid-column: 2;
       grid-row: 3;
       background: rgba(124, 217, 255, 0.9);
     }
 
+    /* 頭突きボタンの位置と色です。 */
     #btnHeadbutt {
       grid-column: 1;
       grid-row: 2;
       background: rgba(255, 230, 109, 0.92);
     }
 
+    /* ベロボタンの位置と色です。 */
     #btnLick {
       grid-column: 2;
       grid-row: 2;
       background: rgba(255, 139, 179, 0.92);
     }
 
+    /* DASHボタンの位置と色です。 */
     #btnDash {
       grid-column: 1;
       grid-row: 3;
       background: rgba(168, 255, 176, 0.92);
     }
 
+    /* RESETボタンの位置と色です。 */
     #btnReset {
       grid-column: 2;
       grid-row: 1;
@@ -521,6 +538,44 @@
     import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
     import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js";
 
+
+    /*
+      =========================================================
+        設定変更ガイド
+      =========================================================
+      このファイルは 1 ファイル完結の3Dゲームです。
+      数値を変更するときは、主に以下の単位・意味で見ます。
+
+      【Three.js / Cannon.js の座標】
+      ・X : 左右方向。プラスは右方向、マイナスは左方向。
+      ・Y : 高さ方向。プラスは上、マイナスは下。
+      ・Z : 奥行き方向。プラス/マイナスで前後方向。
+      ・position: new THREE.Vector3(x, y, z)
+          → オブジェクトの配置位置です。
+      ・size: new THREE.Vector3(x, y, z)
+          → オブジェクトの横幅・高さ・奥行きです。
+
+      【物理系のよく使う値】
+      ・mass        : 重さ。大きいほど動きにくく、吹き飛びにくいです。
+      ・friction    : 摩擦。大きいほど地面や物体に引っかかりやすいです。
+      ・restitution : 反発。大きいほど跳ね返ります。
+      ・linearDamping  : 移動速度の減衰。大きいほどすぐ止まります。
+      ・angularDamping : 回転速度の減衰。大きいほど回転しにくいです。
+      ・hp          : 耐久値。大きいほど壊れにくいです。
+      ・score       : 破壊時にもらえる基本スコアです。
+
+      【ゲーム調整でよく触る場所】
+      ・state                 : ゲーム全体の状態、カメラ初期角度、クールタイムなど。
+      ・PLAYER_START_POSITION : プレイヤーの初期位置。
+      ・createMapProps()      : 道路、高台、階段、看板、剣、ボタンなどのマップ配置。
+      ・createObjects()       : 最初から置かれる破壊可能オブジェクトの数や耐久値。
+      ・createNPCs()          : 最初から出るNPCの人数・犬の数・速度。
+      ・missions              : ミッション内容、達成条件、報酬。
+      ・updatePlayer()        : プレイヤーの移動速度、ダッシュ、操作感。
+      ・headbutt()            : 頭突きの範囲、威力、クールタイム。
+      ・updateCamera()        : カメラ距離、高さ、追従のなめらかさ。
+    */
+
     // =========================================================
     //  基本設定
     // =========================================================
@@ -544,8 +599,10 @@
       powerPreference: "high-performance"
     });
 
+    // 描画解像度の上限です。大きいほど綺麗ですが重くなります。
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
     renderer.setSize(window.innerWidth, window.innerHeight);
+    // 影の描画ON/OFFです。false にすると軽くなりますが影が消えます。
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -555,19 +612,22 @@
     scene.fog = new THREE.Fog(0x87ceeb, 45, 120);
 
     const camera = new THREE.PerspectiveCamera(
-      65,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      500
+      65, // 視野角。大きいほど広角、小さいほどズーム気味になります。
+      window.innerWidth / window.innerHeight, // 画面の縦横比です。
+      0.1, // カメラに映る最短距離です。
+      500 // カメラに映る最長距離です。
     );
 
     const clock = new THREE.Clock();
 
     const world = new CANNON.World({
+      // 重力です。Yをさらにマイナスにすると落下が速くなります。
       gravity: new CANNON.Vec3(0, -9.82, 0)
     });
 
+    // 物理計算の精度です。大きいほど安定しますが重くなります。
     world.solver.iterations = 12;
+    // 物理計算の許容誤差です。小さいほど精密ですが重くなります。
     world.solver.tolerance = 0.001;
 
     world.allowSleep = true;
@@ -581,31 +641,31 @@
       defaultMaterial,
       defaultMaterial,
       {
-        friction: 0.45,
-        restitution: 0.28
+        friction: 0.45,    // 通常物体同士の摩擦です。
+        restitution: 0.28  // 通常物体同士の跳ね返りです。
       }
     );
 
     world.addContactMaterial(
       new CANNON.ContactMaterial(defaultMaterial, groundMaterial, {
-        friction: 0.8,
-        restitution: 0.18
+        friction: 0.8,     // 通常物体と地面の摩擦です。
+        restitution: 0.18  // 通常物体と地面の跳ね返りです。
       })
     );
 
     world.addContactMaterial(
       new CANNON.ContactMaterial(bouncyMaterial, groundMaterial, {
         // 自キャラが地面に引っかかる感じを減らす
-        friction: 0.08,
-        restitution: 0.02
+        friction: 0.08,    // プレイヤーと地面の摩擦です。大きいと引っかかりやすくなります。
+        restitution: 0.02  // プレイヤーと地面の跳ね返りです。
       })
     );
 
     world.addContactMaterial(
       new CANNON.ContactMaterial(bouncyMaterial, defaultMaterial, {
         // 箱・車・板・NPCに触れたときに引っかかりすぎないようにする
-        friction: 0.12,
-        restitution: 0.02
+        friction: 0.12,    // プレイヤーと箱/NPCなどの摩擦です。
+        restitution: 0.02  // プレイヤーと箱/NPCなどの跳ね返りです。
       })
     );
 
@@ -614,46 +674,75 @@
     // =========================================================
 
     const state = {
+      // ゲーム開始済みかどうか。START押下後に true になります。
       started: false,
+
+      // ゲーム開始直後に、落下や初期衝突で壊れないようにする保護時間です。秒単位。
       startProtectionTimer: 0,
+
+      // スコア関連。score は現在スコア、comboMultiplier は倍率です。
       score: 0,
       comboCount: 0,
       comboMultiplier: 1,
       comboTimer: 0,
+
+      // 破壊数関連。destroyedByName は「箱」「板」など名前別の破壊数です。
       destroyedCount: 0,
       destroyedByName: {},
+
+      // アクションのクールタイム。0より大きい間は再使用できません。
       headbuttCooldown: 0,
       jumpCooldown: 0,
       dashTime: 0,
       dashCooldown: 0,
+
+      // カメラ初期角度。
+      // cameraYaw   : 左右の向き。0 が初期方向です。
+      // cameraPitch : 上下の向き。マイナスにすると少し上向き、プラスにすると少し下向きです。
       cameraYaw: 0,
       cameraPitch: -0.05,
+
+      // プレイヤーが地面/足場に乗っているかどうか。ジャンプ可否に使います。
       isGrounded: false,
+
+      // ベロで掴んでいる対象。null のときは何も掴んでいません。
       lickTarget: null,
       lickLine: null,
+
+      // ミッションと伝説の剣の状態です。
       missionCompleted: false,
       hasLegendarySword: false,
+
+      // 画面中央メッセージの表示残り時間。秒単位です。
       messageTimer: 0
     };
 
     const keys = {
-      forward: false,
-      back: false,
-      left: false,
-      right: false,
-      jump: false,
-      dash: false
+      // PCキーボード入力の状態です。
+      // true の間、その方向/アクションが押されている扱いになります。
+      forward: false, // Wキー：前進
+      back: false,    // Sキー：後退
+      left: false,    // Aキー：左移動
+      right: false,   // Dキー：右移動
+      jump: false,    // Spaceキー：ジャンプ
+      dash: false     // Shiftキー：ダッシュ
     };
 
+    // プレイヤーの初期位置です。
+    // new THREE.Vector3(X, Y, Z) の順で、Yを上げると高い位置から開始します。
     const PLAYER_START_POSITION = new THREE.Vector3(0, 4, 0);
-    // 落下してしばらく落ちてからリセットされる高さ
+
+    // 落下リセットの高さです。
+    // このY座標より下に落ちると、プレイヤー/NPCが再出現します。
+    // 数値を小さくするほど、長く落下してから戻ります。
     const FALL_RESET_Y = -35;
 
     const joystick = {
-      active: false,
-      pointerId: null,
-      x: 0,
-      y: 0
+      // スマホ左下の仮想スティックの状態です。
+      active: false,   // タッチ中かどうか
+      pointerId: null, // どの指で操作しているか
+      x: 0,            // 左右入力。-1〜1
+      y: 0             // 前後入力。-1〜1
     };
 
     const gameObjects = [];
@@ -670,8 +759,15 @@
     // 灰色高台の上に置くスポーンボタン
     const spawnButton = {
       mesh: null,
+
+      // スポーンボタンの位置です。
+      // 灰色高台の上面がだいたい Y=8 なので、Y=8.08 で高台に乗る高さにしています。
       position: new THREE.Vector3(-36, 8.08, -24),
+
+      // 押したあと再度押せるようになるまでの残り時間。秒単位です。
       cooldown: 0,
+
+      // 押した時のへこみアニメーション用の値です。
       pressAnim: 0
     };
 
@@ -911,6 +1007,9 @@
     // =========================================================
 
     const textures = {
+      // Canvasで作る簡易テクスチャです。
+      // baseColor は基本色、noiseColor はまだら模様の色です。
+      // repeat.set(x, y) の値を大きくすると模様が細かく繰り返されます。
       grass: createNoiseTexture({
         baseColor: "#6fc05d",
         noiseColor: "#3f9b42",
@@ -976,6 +1075,8 @@
     // =========================================================
 
     function createGround() {
+      // 地面の見た目サイズです。110 x 110 の平面を表示します。
+      // 後ろ2つの 12, 12 は分割数で、見た目の細かさに関係します。
       const groundGeo = new THREE.PlaneGeometry(110, 110, 12, 12);
       const groundMat = new THREE.MeshStandardMaterial({
         map: textures.grass,
@@ -995,6 +1096,7 @@
         mass: 0,
         type: CANNON.Body.STATIC,
         material: groundMaterial,
+        // 地面の物理判定サイズです。表示サイズ110の半分なのでX/Zは55です。
         shape: new CANNON.Box(new CANNON.Vec3(55, 0.1, 55))
       });
 
@@ -1009,6 +1111,7 @@
     }
 
     function createBoundary() {
+      // 外枠の壁色です。0xRRGGBB形式の色指定です。
       const wallColor = 0x5d8050;
 
       createStaticBox(
@@ -1040,6 +1143,13 @@
       );
     }
 
+    // 固定オブジェクトを作る共通関数です。
+    // position : 配置位置。new THREE.Vector3(x, y, z)
+    // size     : サイズ。new THREE.Vector3(横幅, 高さ, 奥行き)
+    // color    : 見た目の色。0xRRGGBB形式
+    // options.name       : 管理用の名前
+    // options.friction   : 摩擦
+    // options.restitution: 跳ね返り
     function createStaticBox(position, size, color, options = {}) {
       const {
         name = "staticBox",
@@ -1115,6 +1225,10 @@
       return { mesh, body };
     }
 
+    // 道路の白線を作る関数です。
+    // centerX/centerZ : 道路の中心位置
+    // y               : 白線の高さ。道路より少し上にします。
+    // width/length    : 道路の幅と長さ
     function createRoadMarkings(centerX, y, centerZ, width, length) {
       const lineMat = new THREE.MeshBasicMaterial({
         color: 0xffffff,
@@ -1278,10 +1392,13 @@
       );
     }
 
+    // 高い位置からランダムな破壊可能オブジェクトを1つ出す関数です。
+    // ボタン効果や落下後再出現で使います。
     function spawnRandomBreakableFromSky(position = getRandomSpawnHighPosition()) {
       const r = Math.random();
       let obj;
 
+      // 0.00〜0.45 : 箱を出す割合です。
       if (r < 0.45) {
         obj = createDynamicBox({
           position,
@@ -1293,6 +1410,7 @@
           name: "箱",
           breakable: true
         });
+      // 0.45〜0.70 : 板を出す割合です。
       } else if (r < 0.7) {
         obj = createDynamicBox({
           position,
@@ -1304,6 +1422,7 @@
           name: "板",
           breakable: true
         });
+      // 0.70〜0.90 : 車を出す割合です。
       } else if (r < 0.9) {
         obj = createDynamicBox({
           position,
@@ -1316,6 +1435,7 @@
           breakable: true,
           visualType: "car"
         });
+      // 0.90〜1.00 : あやしい赤箱を出す割合です。
       } else {
         obj = createDynamicBox({
           position,
@@ -1361,6 +1481,8 @@
       });
     }
 
+    // 灰色高台のボタンを押した時の出現処理です。
+    // 破壊可能オブジェクト70%、人15%、犬15%の割合です。
     function spawnFromButton() {
       const r = Math.random();
 
@@ -1409,6 +1531,7 @@
 
     function createMapProps() {
       // 道路
+      // BoxGeometry(幅, 高さ, 長さ)。現在は幅14、長さ105です。
       const road = new THREE.Mesh(
         new THREE.BoxGeometry(14, 0.08, 105),
         new THREE.MeshStandardMaterial({
@@ -1427,6 +1550,7 @@
       createRoadMarkings(-18, 0.11, 0, 14, 105);
 
       // スロープ
+      // 第1引数が位置、第2引数がサイズです。Yを上げると高くなります。
       createStaticBox(new THREE.Vector3(16, 0.55, -10), new THREE.Vector3(8, 1.1, 7), 0x9f7b4f);
 
       // 小さな台
@@ -1652,17 +1776,17 @@ createStaticBox(
     const player = {
       mesh: createGoatMesh(),
       body: new CANNON.Body({
-        mass: 4,
+        mass: 4, // プレイヤーの重さです。大きいほど吹き飛びにくくなります。
         material: bouncyMaterial,
-        fixedRotation: true,
-        linearDamping: 0.08,
-        angularDamping: 0.95,
-        shape: new CANNON.Sphere(0.72)
+        fixedRotation: true, // trueならプレイヤーの物理回転を固定し、転がりにくくします。
+        linearDamping: 0.08, // 移動速度の減衰です。大きいほどすぐ止まります。
+        angularDamping: 0.95, // 回転の減衰です。大きいほど回転しにくいです。
+        shape: new CANNON.Sphere(0.72) // プレイヤーの物理判定サイズです。半径0.72の球です。
       }),
       visualYaw: 0,
 
       // 物理Bodyは球体のまま、見た目だけ少し上に上げて足の地面埋まりを防ぐ
-      visualYOffset: 0.46
+      visualYOffset: 0.46 // 見た目だけを上にずらす量です。足の埋まり具合を調整します。
     };
 
     player.mesh.scale.set(1.1, 1.1, 1.1);
@@ -2060,6 +2184,8 @@ createStaticBox(
       return group;
     }
 
+    // NPCを作る共通関数です。
+    // type: "human" または "dog"、speedで移動速度、wanderRadiusで歩き回る範囲を調整します。
     function createNPC(options) {
       const {
         type,
@@ -2231,6 +2357,9 @@ createStaticBox(
       }
     }
 
+    // ゲーム開始時に配置されるNPC一覧です。
+    // speedを大きくすると歩く速度が上がります。
+    // wanderRadiusを大きくすると、より広い範囲を歩きます。
     function createNPCs() {
       const npcConfigs = [
         { type: "human", name: "人", color: 0x4f8cff, speed: 4.2, wanderRadius: 12 },
@@ -2409,6 +2538,16 @@ createStaticBox(
       return sword;
     }
 
+    // 破壊可能/移動可能な物理オブジェクトを作る共通関数です。
+    // options.position   : 初期位置
+    // options.size       : サイズ
+    // options.color      : 色
+    // options.mass       : 重さ。大きいほど動きにくいです。
+    // options.hp         : 耐久値。大きいほど壊れにくいです。
+    // options.score      : 破壊時のスコア
+    // options.name       : 「箱」「板」「車っぽい物体」などの名前
+    // options.breakable  : trueなら破壊可能、falseなら破壊不能
+    // options.visualType : 見た目タイプ。box/car/dangerBox/legendarySword など
     function createDynamicBox(options) {
       const {
         position,
@@ -2591,6 +2730,8 @@ createStaticBox(
       showMessage(`${obj.name}を破壊！`);
     }
 
+    // ゲーム開始時に最初から配置される破壊可能オブジェクトを作ります。
+    // 個数、位置、サイズ、hp、score を調整したい場合はこの関数内を変更します。
     function createObjects() {
       // 箱エリア
       for (let i = 0; i < 26; i++) {
@@ -2607,6 +2748,7 @@ createStaticBox(
       }
 
       // 車風オブジェクト
+      // i < 5 の 5 が車の初期配置数です。hpが高いほど壊れにくいです。
       for (let i = 0; i < 5; i++) {
         createDynamicBox({
           position: new THREE.Vector3(-18 + rand(-3, 3), 1.0, -30 + i * 14),
@@ -2623,6 +2765,7 @@ createStaticBox(
       }
 
       // 板オブジェクト
+      // i < 10 の 10 が板の初期配置数です。
       // 破壊不能の固定看板と区別するため、名称は「板」にする
       for (let i = 0; i < 10; i++) {
         createDynamicBox({
@@ -2816,6 +2959,8 @@ createStaticBox(
       }
     }
 
+    // キーボード・スマホボタン・ジョイスティックの入力設定です。
+    // キー割り当てを変えたい場合はこの中の keydown/keyup を変更します。
     function setupControls() {
       window.addEventListener("keydown", (event) => {
         switch (event.code) {
@@ -2964,6 +3109,8 @@ createStaticBox(
       joystickKnob.style.transform = "translate(0px, 0px)";
     }
 
+    // 画面ドラッグでカメラを回転する処理です。
+    // 感度や上下回転の制限を変えたい場合はこの関数を調整します。
     function setupCameraDrag() {
       let dragging = false;
       let pointerId = null;
@@ -3073,6 +3220,8 @@ createStaticBox(
       }
     }
 
+    // プレイヤーの移動処理です。
+    // 通常移動速度、ダッシュ速度、摩擦対策、足アニメーションなどを調整します。
     function updatePlayer(delta) {
       state.headbuttCooldown = Math.max(0, state.headbuttCooldown - delta);
       state.jumpCooldown = Math.max(0, state.jumpCooldown - delta);
@@ -3119,21 +3268,24 @@ createStaticBox(
 
         move.normalize();
 
-        const speed = state.dashTime > 0 ? 15.2 : 10.8;
+        // 移動速度です。左がダッシュ中、右が通常時です。
+      const speed = state.dashTime > 0 ? 15.2 : 10.8;
         const targetVX = move.x * speed;
         const targetVZ = move.z * speed;
 
         // 接地中は摩擦に負けないように、横方向速度を強めに反映する
         // 空中では少し補間して、ジャンプ中の操作感を自然にする
         if (state.isGrounded) {
-          const groundAccel = state.dashTime > 0 ? 0.82 : 0.68;
+          // 接地中の加速の強さです。大きいほど入力にキビキビ反応します。
+      const groundAccel = state.dashTime > 0 ? 0.82 : 0.68;
 
           player.body.velocity.x += (targetVX - player.body.velocity.x) * groundAccel;
           player.body.velocity.z += (targetVZ - player.body.velocity.z) * groundAccel;
 
           // 接地中に速度が極端に落ちた場合の最低移動補助
           const horizontalSpeed = Math.hypot(player.body.velocity.x, player.body.velocity.z);
-          const minGroundSpeed = state.dashTime > 0 ? 7.5 : 5.8;
+          // 地面で摩擦に負けないための最低速度です。
+      const minGroundSpeed = state.dashTime > 0 ? 7.5 : 5.8;
 
           if (horizontalSpeed < minGroundSpeed) {
             player.body.velocity.x = move.x * minGroundSpeed;
@@ -3273,6 +3425,8 @@ createStaticBox(
       showMessage("ダッシュ！");
     }
 
+    // 頭突き処理です。
+    // 範囲、威力、クールタイム、伝説の剣装備時の倍率などを調整します。
     function headbutt() {
       if (!state.started) return;
       if (state.headbuttCooldown > 0) return;
@@ -3310,7 +3464,8 @@ createStaticBox(
         if (angleScore > 0.25) {
           hitSomething = true;
 
-          const impulsePower = 10 + Math.max(0, 4.2 - distance) * 3.5;
+          // 基本吹き飛ばし力です。近いほど強くなります。
+      const impulsePower = 10 + Math.max(0, 4.2 - distance) * 3.5;
           obj.body.wakeUp();
 
         if (obj.isNPC) {
@@ -3690,6 +3845,8 @@ createStaticBox(
       shake.strength = Math.max(shake.strength, strength);
     }
 
+    // カメラ追従処理です。
+    // 距離、高さ、上下角度、追従のなめらかさを調整します。
     function updateCamera(delta) {
       const target = cannonToThreeVec3(player.body.position).add(new THREE.Vector3(0, 1.2, 0));
 
@@ -3722,6 +3879,12 @@ createStaticBox(
     //  ミッション
     // =========================================================
 
+    // ミッション定義です。
+    // title       : ミッション名
+    // desc        : 一覧に表示する説明
+    // reward      : 達成時の追加スコア
+    // progressText: 進捗表示
+    // check       : trueになったら達成
     const missions = [
       {
         id: "destroy10",
