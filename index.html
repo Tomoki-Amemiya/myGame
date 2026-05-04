@@ -800,6 +800,10 @@
     player.body.position.set(0, 3, 0);
     player.body.updateMassProperties();
     world.addBody(player.body);
+    
+    // プレイヤーが物理演算のスリープ状態になって操作不能になるのを防ぐ
+    player.body.allowSleep = false;
+    player.body.wakeUp();
 
     // =========================================================
     //  物理オブジェクト生成
@@ -1296,6 +1300,8 @@
       move.addScaledVector(forward, -inputY);
 
       if (move.lengthSq() > 0.001) {
+        player.body.wakeUp();
+
         move.normalize();
 
         // 通常移動が遅めだったため少し速くする(元の値：0 ? 12.5 : 7.0;)
@@ -1374,7 +1380,7 @@
       player.body.velocity.y = 8.4;
 
       state.jumpCooldown = 0.28;
-      addScore(2, player.mesh.position);
+      // addScore(2, player.mesh.position); ←※ジャンプでスコア2加算されていたので削除
       showMessage("ジャンプ！");
     }
 
@@ -1460,14 +1466,26 @@
     }
 
     function resetPlayer() {
-      player.body.position.set(0, 4, 0);
-      player.body.velocity.set(0, 0, 0);
-      player.body.angularVelocity.set(0, 0, 0);
-      player.body.quaternion.set(0, 0, 0, 1);
-
       if (state.lickTarget) {
         releaseLick();
       }
+
+      player.body.position.set(0, 4, 0);
+      player.body.velocity.set(0, -0.1, 0);
+      player.body.angularVelocity.set(0, 0, 0);
+      player.body.quaternion.set(0, 0, 0, 1);
+
+      // RESET後に空中で止まったように見える問題を防ぐ
+      player.body.force.set(0, 0, 0);
+      player.body.torque.set(0, 0, 0);
+      player.body.sleepState = CANNON.Body.AWAKE;
+      player.body.wakeUp();
+
+      state.isGrounded = false;
+      state.dashTime = 0;
+      state.jumpCooldown = 0;
+
+      syncMeshWithBody(player.mesh, player.body);
 
       showMessage("リセット！");
     }
@@ -1493,10 +1511,18 @@
       }
 
       state.lickTarget = target;
+
+      // ベロ保持中は暴れすぎないように一時的に減衰を強める
+      target._beforeLickLinearDamping = target.body.linearDamping;
+      target._beforeLickAngularDamping = target.body.angularDamping;
+
+      target.body.linearDamping = 0.55;
+      target.body.angularDamping = 0.75;
       target.body.wakeUp();
+
       createLickLine();
 
-      addScore(10, target.mesh.position);
+      // ベロでつかむだけではスコア加算しない
       showMessage(`${target.name}をつかんだ！`);
     }
 
@@ -1555,6 +1581,24 @@
     }
 
     function releaseLick() {
+      if (state.lickTarget && state.lickTarget.body) {
+        const obj = state.lickTarget;
+
+        // ベロ保持前の減衰値に戻す
+        if (typeof obj._beforeLickLinearDamping === "number") {
+          obj.body.linearDamping = obj._beforeLickLinearDamping;
+        }
+
+        if (typeof obj._beforeLickAngularDamping === "number") {
+          obj.body.angularDamping = obj._beforeLickAngularDamping;
+        }
+
+        delete obj._beforeLickLinearDamping;
+        delete obj._beforeLickAngularDamping;
+
+        obj.body.wakeUp();
+      }
+
       if (state.lickLine) {
         scene.remove(state.lickLine);
         state.lickLine.geometry.dispose();
@@ -1571,6 +1615,8 @@
         return;
       }
 
+      const obj = state.lickTarget;
+
       const playerPos = cannonToThreeVec3(player.body.position);
       const forward = new THREE.Vector3(
         Math.sin(player.visualYaw),
@@ -1579,34 +1625,62 @@
       ).normalize();
 
       const mouthPos = playerPos.clone()
-        .add(new THREE.Vector3(0, 0.55, 0))
+        .add(new THREE.Vector3(0, 0.65, 0))
         .add(forward.clone().multiplyScalar(0.95));
 
-      const holdPos = mouthPos.clone().add(forward.clone().multiplyScalar(2.8));
+      const holdPos = mouthPos.clone()
+        .add(forward.clone().multiplyScalar(2.6))
+        .add(new THREE.Vector3(0, 0.45, 0));
 
-      const obj = state.lickTarget;
       const objPos = cannonToThreeVec3(obj.body.position);
-
       const toHold = holdPos.clone().sub(objPos);
       const distance = toHold.length();
 
-      if (distance > 10) {
+      // 以前は10m程度で外していたが、少し振り回せるように距離を緩和
+      if (distance > 18) {
         releaseLick();
         showMessage("ベロが外れた！");
         return;
       }
 
-      // バネっぽく引っ張る
-      const force = toHold.multiplyScalar(18 * obj.body.mass);
       obj.body.wakeUp();
+
+      // 強すぎるバネ力で地面衝突時に吹っ飛んでいたため、
+      // 「やや柔らかいバネ + 速度減衰 + 速度上限」に変更する
+      const velocity = cannonToThreeVec3(obj.body.velocity);
+
+      const springStrength = 7.5 * obj.body.mass;
+      const dampingStrength = 2.8 * obj.body.mass;
+
+      const springForce = toHold.multiplyScalar(springStrength);
+      const dampingForce = velocity.multiplyScalar(-dampingStrength);
+      const totalForce = springForce.add(dampingForce);
+
+      // 地面に擦ったときに極端に暴れないよう、少しだけ持ち上げ補助
+      if (obj.body.position.y < 0.9) {
+        totalForce.y += obj.body.mass * 18;
+      }
+
       obj.body.applyForce(
-        new CANNON.Vec3(force.x, force.y + obj.body.mass * 6, force.z),
+        new CANNON.Vec3(totalForce.x, totalForce.y, totalForce.z),
         obj.body.position
       );
 
-      // 近距離で暴れすぎないように少し減衰
-      obj.body.velocity.x *= 0.985;
-      obj.body.velocity.z *= 0.985;
+      // 回転しすぎると暴れやすいので、ベロ保持中だけ回転速度を抑える
+      obj.body.angularVelocity.x *= 0.88;
+      obj.body.angularVelocity.y *= 0.88;
+      obj.body.angularVelocity.z *= 0.88;
+
+      // 移動速度に上限をかけて、地面接触時の異常な吹っ飛びを抑える
+      const maxSpeed = 9.0;
+      const currentSpeed = obj.body.velocity.length();
+
+      if (currentSpeed > maxSpeed) {
+        const scale = maxSpeed / currentSpeed;
+        obj.body.velocity.x *= scale;
+        obj.body.velocity.y *= scale;
+        obj.body.velocity.z *= scale;
+      }
 
       if (state.lickLine) {
         const positions = state.lickLine.geometry.attributes.position;
@@ -1615,9 +1689,7 @@
         positions.needsUpdate = true;
       }
 
-      if (distance > 4.5) {
-        addScore(1, obj.mesh.position);
-      }
+      // ベロで移動させるだけではスコア加算しない
     }
 
     // =========================================================
