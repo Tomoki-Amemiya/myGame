@@ -313,7 +313,7 @@
 
     #btnJump {
       grid-column: 2;
-      grid-row: 1;
+      grid-row: 3;
       background: rgba(124, 217, 255, 0.9);
     }
 
@@ -337,7 +337,7 @@
 
     #btnReset {
       grid-column: 2;
-      grid-row: 3;
+      grid-row: 1;
       background: rgba(255, 170, 122, 0.92);
     }
 
@@ -1109,6 +1109,72 @@
       return { mesh, body };
     }
 
+    function createTitleTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1024;
+      canvas.height = 512;
+
+      const ctx = canvas.getContext("2d");
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, "#ffd84a");
+      gradient.addColorStop(1, "#c08a18");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "rgba(82, 48, 0, 0.55)";
+      ctx.lineWidth = 24;
+      ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+      for (let y = 36; y < canvas.height; y += 58) {
+        ctx.fillRect(42, y, canvas.width - 84, 8);
+      }
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+
+      ctx.font = "900 96px system-ui, -apple-system, 'Segoe UI', sans-serif";
+      ctx.strokeStyle = "#3b2100";
+      ctx.lineWidth = 16;
+      ctx.strokeText("めちゃくちゃ", canvas.width / 2, 185);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText("めちゃくちゃ", canvas.width / 2, 185);
+
+      ctx.font = "900 104px system-ui, -apple-system, 'Segoe UI', sans-serif";
+      ctx.strokeText("ヤギ物理ゲーム", canvas.width / 2, 320);
+      ctx.fillStyle = "#fff7b0";
+      ctx.fillText("ヤギ物理ゲーム", canvas.width / 2, 320);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = 4;
+      texture.needsUpdate = true;
+      return texture;
+    }
+
+    function createTitleSign() {
+      // 当たり判定用の柱と看板本体は createStaticBox で維持する
+      createStaticBox(new THREE.Vector3(4, 2, 22), new THREE.Vector3(0.5, 4, 0.5), 0x2b2114, { name: "titleSignPole" });
+      createStaticBox(new THREE.Vector3(4, 4.2, 22), new THREE.Vector3(5, 2, 0.4), 0xffda4f, { name: "titleSignBoard" });
+
+      // 表示用テキスト面。薄い板の前面に少しだけ浮かせて貼る。
+      const titleTexture = createTitleTexture();
+      const titlePlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.65, 1.65),
+        new THREE.MeshBasicMaterial({
+          map: titleTexture,
+          transparent: true,
+          side: THREE.DoubleSide
+        })
+      );
+
+      titlePlane.position.set(4, 4.2, 21.76);
+      titlePlane.castShadow = false;
+      titlePlane.receiveShadow = false;
+      scene.add(titlePlane);
+    }
+
     function createMapProps() {
       // 道路
       const road = new THREE.Mesh(
@@ -1250,9 +1316,8 @@ createStaticBox(
   { name: "grayPlatformBackEdge" }
 );
 
-      // 看板柱
-      createStaticBox(new THREE.Vector3(4, 2, 22), new THREE.Vector3(0.5, 4, 0.5), 0x444444);
-      createStaticBox(new THREE.Vector3(4, 4.2, 22), new THREE.Vector3(5, 2, 0.4), 0xffda4f);
+      // タイトル看板
+      createTitleSign();
     }
 
     // =========================================================
@@ -1546,7 +1611,7 @@ createStaticBox(
         new THREE.SphereGeometry(size.x * 0.075, 12, 12),
         markMat
       );
-      exclamationDot.position.set(0, size.y * 0.93, 0);
+      exclamationDot.position.set(0, size.y * 0.88, 0);
       exclamationDot.castShadow = true;
       group.add(exclamationDot);
 
@@ -1866,7 +1931,7 @@ createStaticBox(
         name: "人",
         position: new THREE.Vector3(-10, 0, -8),
         color: 0x4f8cff,
-        speed: 2.1,
+        speed: 4.2,
         wanderRadius: 12
       });
 
@@ -1875,7 +1940,7 @@ createStaticBox(
         name: "人",
         position: new THREE.Vector3(18, 0, 20),
         color: 0xff7a7a,
-        speed: 2.0,
+        speed: 4.0,
         wanderRadius: 12
       });
 
@@ -1884,7 +1949,7 @@ createStaticBox(
         name: "人",
         position: new THREE.Vector3(-30, 0, 16),
         color: 0x8be06a,
-        speed: 2.2,
+        speed: 4.4,
         wanderRadius: 11
       });
 
@@ -1895,7 +1960,7 @@ createStaticBox(
         color: 0xb07a45,
         radius: 0.45,
         height: 0.9,
-        speed: 2.7,
+        speed: 5.4,
         wanderRadius: 13
       });
 
@@ -1906,7 +1971,7 @@ createStaticBox(
         color: 0xd6b17a,
         radius: 0.45,
         height: 0.9,
-        speed: 2.55,
+        speed: 5.1,
         wanderRadius: 12
       });
     }
@@ -2105,7 +2170,8 @@ createStaticBox(
           size: new THREE.Vector3(2.8, 1.0, 4.5),
           color: [0xff5544, 0x4477ff, 0xffff66, 0x66ff99, 0xffffff][i % 5],
           mass: 5,
-          hp: 180,
+          // 車は頭突き10回前後で壊れる程度に耐久力を上げる
+          hp: 720,
           score: 220,
           name: "車っぽい物体",
           breakable: true,
@@ -2143,7 +2209,8 @@ createStaticBox(
           size: new THREE.Vector3(1.4, 1.4, 1.4),
           color: 0xff2222,
           mass: 2,
-          hp: 40,
+          // あやしい赤箱は頭突き3回前後で壊れる程度にする
+          hp: 210,
           score: 180,
           name: "あやしい赤箱",
           breakable: true,
