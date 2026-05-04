@@ -874,6 +874,12 @@
     function handleObjectCollision(obj, event) {
       if (!obj.breakable || obj.destroyed) return;
 
+      // ベロでつかんでいる間は、地面や他オブジェクトにぶつかっても壊れない
+      // ベロを離した後は通常どおり壊れる
+      if (state.lickTarget === obj) {
+        return;
+      }
+
       const relativeVelocity = event.contact.getImpactVelocityAlongNormal();
       const impact = Math.abs(relativeVelocity) * obj.body.mass;
 
@@ -1275,7 +1281,8 @@
       if (keys.right) inputX += 1;
 
       if (Math.abs(joystick.x) > 0.05 || Math.abs(joystick.y) > 0.05) {
-        inputX += joystick.x;
+        // スマホスティック用
+        inputX -= joystick.x;
         inputY += joystick.y;
       }
 
@@ -1291,7 +1298,8 @@
       if (move.lengthSq() > 0.001) {
         move.normalize();
 
-        const speed = state.dashTime > 0 ? 12.5 : 7.0;
+        // 通常移動が遅めだったため少し速くする(元の値：0 ? 12.5 : 7.0;)
+        const speed = state.dashTime > 0 ? 14.5 : 9.2;
 
         player.body.velocity.x = move.x * speed;
         player.body.velocity.z = move.z * speed;
@@ -1304,7 +1312,10 @@
 
       syncMeshWithBody(player.mesh, player.body);
 
-      player.mesh.rotation.set(0, player.visualYaw, 0);
+      // 自キャラモデル設定
+      // モデル自体はローカルの -Z 方向を向いて作っているため、
+      // 進行方向に顔が向くように180度補正する
+      player.mesh.rotation.set(0, player.visualYaw + Math.PI, 0);
 
       // ダッシュ中の少し派手な上下揺れ
       if (state.dashTime > 0) {
@@ -1317,29 +1328,54 @@
     }
 
     function checkGrounded() {
-      const ray = new CANNON.Ray(
-        player.body.position,
-        new CANNON.Vec3(player.body.position.x, player.body.position.y - 1.05, player.body.position.z)
+      const from = new CANNON.Vec3(
+        player.body.position.x,
+        player.body.position.y,
+        player.body.position.z
       );
 
+      const to = new CANNON.Vec3(
+        player.body.position.x,
+        player.body.position.y - 1.35,
+        player.body.position.z
+      );
+
+      const ray = new CANNON.Ray(from, to);
       const result = new CANNON.RaycastResult();
+
       ray.intersectWorld(world, {
         mode: CANNON.Ray.CLOSEST,
         result,
         skipBackfaces: true
       });
 
-      state.isGrounded = result.hasHit;
+      // 通常の地面上ではプレイヤー中心Yがだいたい 0.7〜1.0 付近になる。
+      // Ray判定に加えて、高さとY速度でも補助判定する。
+      const nearGround =
+        player.body.position.y <= 1.05 &&
+        Math.abs(player.body.velocity.y) < 1.2;
+
+      state.isGrounded = result.hasHit || nearGround;
     }
 
     function jump() {
       if (!state.started) return;
-      if (!state.isGrounded) return;
       if (state.jumpCooldown > 0) return;
 
-      player.body.velocity.y = 7.2;
-      state.jumpCooldown = 0.25;
+      // ボタンを押した瞬間にも接地判定を再確認する
+      // スマホ操作ではタイミングによって state.isGrounded が false のままになることがあるため
+      checkGrounded();
+
+      if (!state.isGrounded) return;
+
+      player.body.wakeUp();
+
+      // 現在の落下/上昇速度に左右されにくいように、Y速度を直接設定する
+      player.body.velocity.y = 8.4;
+
+      state.jumpCooldown = 0.28;
       addScore(2, player.mesh.position);
+      showMessage("ジャンプ！");
     }
 
     function startDash() {
