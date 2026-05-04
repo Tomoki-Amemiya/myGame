@@ -561,17 +561,17 @@
 
     world.addContactMaterial(
       new CANNON.ContactMaterial(bouncyMaterial, groundMaterial, {
-        // プレイヤーが地面や段差で不自然に跳ねるのを抑える
-        friction: 0.85,
-        restitution: 0.04
+        // 自キャラが地面に引っかかる感じを減らす
+        friction: 0.08,
+        restitution: 0.02
       })
     );
 
     world.addContactMaterial(
       new CANNON.ContactMaterial(bouncyMaterial, defaultMaterial, {
-        // プレイヤーが箱・車・板・NPCなどに触れた時の跳ね上がりを抑える
-        friction: 0.75,
-        restitution: 0.03
+        // 箱・車・板・NPCに触れたときに引っかかりすぎないようにする
+        friction: 0.12,
+        restitution: 0.02
       })
     );
 
@@ -814,73 +814,74 @@
       }
     }
 
-function createStaticBox(position, size, color, options = {}) {
-  const {
-    name = "staticBox",
-    friction = 0.9,
-    restitution = 0.08
-  } = options;
+    function createStaticBox(position, size, color, options = {}) {
+      const {
+        name = "staticBox",
+        // 高台・階段・固定物の上で自キャラが引っかかりすぎないようにする
+        friction = 0.12,
+        restitution = 0.02
+      } = options;
 
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(size.x, size.y, size.z),
-    new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.75
-    })
-  );
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x, size.y, size.z),
+        new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.75
+        })
+      );
 
-  mesh.position.copy(position);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
+      mesh.position.copy(position);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
 
-  const staticBoxMaterial = new CANNON.Material(`${name}_material`);
+      const staticBoxMaterial = new CANNON.Material(`${name}_material`);
 
-  const body = new CANNON.Body({
-    mass: 0,
-    type: CANNON.Body.STATIC,
-    material: staticBoxMaterial,
-    shape: new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2))
-  });
+      const body = new CANNON.Body({
+        mass: 0,
+        type: CANNON.Body.STATIC,
+        material: staticBoxMaterial,
+        shape: new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2))
+      });
 
-  body.position.set(position.x, position.y, position.z);
-  body.allowSleep = false;
-  body.userData = {
-    name,
-    kind: "staticPlatform",
-    size: size.clone()
-  };
+      body.position.set(position.x, position.y, position.z);
+      body.allowSleep = false;
+      body.userData = {
+        name,
+        kind: "staticPlatform",
+        size: size.clone()
+      };
 
-  world.addBody(body);
+      world.addBody(body);
 
-  world.addContactMaterial(
-    new CANNON.ContactMaterial(staticBoxMaterial, bouncyMaterial, {
-      friction,
-      restitution
-    })
-  );
+      world.addContactMaterial(
+        new CANNON.ContactMaterial(staticBoxMaterial, bouncyMaterial, {
+          friction,
+          restitution
+        })
+      );
 
-  world.addContactMaterial(
-    new CANNON.ContactMaterial(staticBoxMaterial, defaultMaterial, {
-      friction,
-      restitution
-    })
-  );
+      world.addContactMaterial(
+        new CANNON.ContactMaterial(staticBoxMaterial, defaultMaterial, {
+          friction,
+          restitution
+        })
+      );
 
-  // AABBを明示的に更新して、固定Bodyの判定を安定させる
-  body.aabbNeedsUpdate = true;
-  body.updateAABB();
+      // AABBを明示的に更新して、固定Bodyの判定を安定させる
+      body.aabbNeedsUpdate = true;
+      body.updateAABB();
 
-  // 固定オブジェクトの上に乗ったときもジャンプできるように、足場候補として保持する
-  staticPlatforms.push({
-    body,
-    position: position.clone(),
-    size: size.clone(),
-    name
-  });
+      // 固定オブジェクトの上に乗ったときもジャンプできるように、足場候補として保持する
+      staticPlatforms.push({
+        body,
+        position: position.clone(),
+        size: size.clone(),
+        name
+      });
 
-  return { mesh, body };
-}
+      return { mesh, body };
+    }
 
     function createMapProps() {
       // 道路
@@ -1116,11 +1117,14 @@ createStaticBox(
         mass: 4,
         material: bouncyMaterial,
         fixedRotation: true,
-        linearDamping: 0.32,
+        linearDamping: 0.08,
         angularDamping: 0.95,
         shape: new CANNON.Sphere(0.72)
       }),
-      visualYaw: 0
+      visualYaw: 0,
+
+      // 物理Bodyは球体のまま、見た目だけ少し上に上げて足の地面埋まりを防ぐ
+      visualYOffset: 0.46
     };
 
     player.mesh.scale.set(1.1, 1.1, 1.1);
@@ -2272,41 +2276,54 @@ createStaticBox(
 
         move.normalize();
 
-        const speed = state.dashTime > 0 ? 14.5 : 9.2;
-
+        const speed = state.dashTime > 0 ? 15.2 : 10.8;
         const targetVX = move.x * speed;
         const targetVZ = move.z * speed;
 
-        // 速度を直接切り替えず、少し補間して段差や接触時の引っかかり感を減らす
-        const accel = state.dashTime > 0 ? 0.42 : 0.28;
+        // 接地中は摩擦に負けないように、横方向速度を強めに反映する
+        // 空中では少し補間して、ジャンプ中の操作感を自然にする
+        if (state.isGrounded) {
+          const groundAccel = state.dashTime > 0 ? 0.82 : 0.68;
 
-        player.body.velocity.x += (targetVX - player.body.velocity.x) * accel;
-        player.body.velocity.z += (targetVZ - player.body.velocity.z) * accel;
+          player.body.velocity.x += (targetVX - player.body.velocity.x) * groundAccel;
+          player.body.velocity.z += (targetVZ - player.body.velocity.z) * groundAccel;
 
-        // 横速度が小さすぎる場合は少しだけ押して、段差や地面の摩擦に負けにくくする
-        const horizontalSpeed = Math.hypot(player.body.velocity.x, player.body.velocity.z);
-        if (horizontalSpeed < 1.8) {
-          player.body.velocity.x += move.x * 0.35;
-          player.body.velocity.z += move.z * 0.35;
-        }
+          // 接地中に速度が極端に落ちた場合の最低移動補助
+          const horizontalSpeed = Math.hypot(player.body.velocity.x, player.body.velocity.z);
+          const minGroundSpeed = state.dashTime > 0 ? 7.5 : 5.8;
 
-        // 接地中にオブジェクトや段差で跳ねすぎるのを抑える
-        if (state.isGrounded && state.jumpCooldown <= 0 && state.dashTime <= 0) {
-          if (player.body.velocity.y > 0.65) {
-            player.body.velocity.y *= 0.25;
+          if (horizontalSpeed < minGroundSpeed) {
+            player.body.velocity.x = move.x * minGroundSpeed;
+            player.body.velocity.z = move.z * minGroundSpeed;
           }
+
+          // 地面接触時の細かい跳ねを抑える
+          if (state.jumpCooldown <= 0 && player.body.velocity.y > 0.45) {
+            player.body.velocity.y *= 0.2;
+          }
+        } else {
+          // 空中は少し弱めに操作を効かせる
+          const airAccel = 0.22;
+
+          player.body.velocity.x += (targetVX - player.body.velocity.x) * airAccel;
+          player.body.velocity.z += (targetVZ - player.body.velocity.z) * airAccel;
         }
 
         player.visualYaw = Math.atan2(move.x, move.z);
         isPlayerMoving = true;
       } else {
-        player.body.velocity.x *= 0.84;
-        player.body.velocity.z *= 0.84;
+        // 入力がないときは自然に減速
+        const stopDamping = state.isGrounded ? 0.78 : 0.96;
+        player.body.velocity.x *= stopDamping;
+        player.body.velocity.z *= stopDamping;
       }
 
       animateGoatLegs(delta, isPlayerMoving);
 
       syncMeshWithBody(player.mesh, player.body);
+
+      // 足が地面に埋まりすぎないよう、見た目だけ少し上にずらす
+      player.mesh.position.y += player.visualYOffset || 0;
 
       // 自キャラモデル設定
       // モデル自体はローカルの -Z 方向を向いて作っているため、
@@ -2346,8 +2363,8 @@ createStaticBox(
 
       // 通常地面の補助判定
       const nearBaseGround =
-        playerY <= 1.08 &&
-        Math.abs(player.body.velocity.y) < 1.5;
+        playerY <= 1.15 &&
+        Math.abs(player.body.velocity.y) < 2.0;
 
       // 固定オブジェクトの上面に乗っている場合の補助判定
       let onStaticPlatform = false;
