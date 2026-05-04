@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>めちゃくちゃヤギ物理ゲーム</title>
+  <title>ヤーギ シミュレーター</title>
 
   <style>
     html,
@@ -494,10 +494,10 @@
 
   <div id="startOverlay">
     <div id="startCard">
-      <h1>めちゃくちゃヤギ物理ゲーム</h1>
+      <h1>ヤーギ シミュレーター</h1>
       <p>
-        ヤギ風キャラを操作して、箱・車・看板を吹き飛ばそう。<br />
-        頭突き、ジャンプ、ベロつかみ、物理破壊入りの3Dミニゲームです。
+        ヤギ風キャラを操作して、箱・車・などを吹き飛ばそう。<br />
+        頭突き、ジャンプ、ベロつかみ の 破壊3Dミニゲームです。
       </p>
       <p>
         スマホ：左スティックで移動、右ボタンでアクション。<br />
@@ -627,7 +627,7 @@
       dashTime: 0,
       dashCooldown: 0,
       cameraYaw: 0,
-      cameraPitch: 0.08,
+      cameraPitch: -0.05,
       isGrounded: false,
       lickTarget: null,
       lickLine: null,
@@ -666,6 +666,14 @@
 
     // 爆発エフェクト
     const explosionEffects = [];
+
+    // 灰色高台の上に置くスポーンボタン
+    const spawnButton = {
+      mesh: null,
+      position: new THREE.Vector3(-36, 8.08, -24),
+      cooldown: 0,
+      pressAnim: 0
+    };
 
     // =========================================================
     //  汎用関数
@@ -867,14 +875,9 @@
         ctx.fillRect(0, y, size, 10);
       }
 
+      // 道路の白線はテクスチャではなく、別メッシュで正確に配置する。
+      // ここではアスファルトの横縞だけを作る。
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth = 4;
-      ctx.setLineDash([18, 18]);
-      ctx.beginPath();
-      ctx.moveTo(size / 2, 0);
-      ctx.lineTo(size / 2, size);
-      ctx.stroke();
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.wrapS = THREE.RepeatWrapping;
@@ -1112,6 +1115,49 @@
       return { mesh, body };
     }
 
+    function createRoadMarkings(centerX, y, centerZ, width, length) {
+      const lineMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.88
+      });
+
+      const dashLength = 2.6;
+      const gapLength = 2.2;
+      const lineHeight = 0.025;
+      const centerLineWidth = 0.16;
+      const edgeLineWidth = 0.10;
+      const edgeInset = 0.35;
+      const startZ = centerZ - length / 2 + 1.6;
+      const endZ = centerZ + length / 2 - 1.6;
+
+      function addDash(x, z, w, l) {
+        const dash = new THREE.Mesh(
+          new THREE.BoxGeometry(w, lineHeight, l),
+          lineMat
+        );
+        dash.position.set(x, y, z);
+        dash.receiveShadow = false;
+        dash.castShadow = false;
+        scene.add(dash);
+      }
+
+      // 中央線：道路幅のど真ん中に点線を置く
+      for (let z = startZ; z <= endZ; z += dashLength + gapLength) {
+        addDash(centerX, z + dashLength / 2, centerLineWidth, dashLength);
+      }
+
+      // 左右端線：両端に同じ点線を置く
+      const leftEdgeX = centerX - width / 2 + edgeInset;
+      const rightEdgeX = centerX + width / 2 - edgeInset;
+
+      for (let z = startZ; z <= endZ; z += dashLength + gapLength) {
+        const dashCenterZ = z + dashLength / 2;
+        addDash(leftEdgeX, dashCenterZ, edgeLineWidth, dashLength);
+        addDash(rightEdgeX, dashCenterZ, edgeLineWidth, dashLength);
+      }
+    }
+
     function createTitleTexture() {
       const canvas = document.createElement("canvas");
       canvas.width = 1024;
@@ -1141,14 +1187,14 @@
       ctx.font = "900 96px system-ui, -apple-system, 'Segoe UI', sans-serif";
       ctx.strokeStyle = "#3b2100";
       ctx.lineWidth = 16;
-      ctx.strokeText("めちゃくちゃ", canvas.width / 2, 185);
+      ctx.strokeText("ヤーギ シミュレーター", canvas.width / 2, 185);
       ctx.fillStyle = "#ffffff";
-      ctx.fillText("めちゃくちゃ", canvas.width / 2, 185);
+      ctx.fillText("ヤーギ シミュレーター", canvas.width / 2, 185);
 
       ctx.font = "900 104px system-ui, -apple-system, 'Segoe UI', sans-serif";
-      ctx.strokeText("ヤギ物理ゲーム", canvas.width / 2, 320);
+      ctx.strokeText("目指せ! 破壊神!!", canvas.width / 2, 320);
       ctx.fillStyle = "#fff7b0";
-      ctx.fillText("ヤギ物理ゲーム", canvas.width / 2, 320);
+      ctx.fillText("目指せ! 破壊神!!", canvas.width / 2, 320);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.anisotropy = 4;
@@ -1181,6 +1227,186 @@
       scene.add(titlePlane);
     }
 
+
+    function createSpawnButton() {
+      const group = new THREE.Group();
+
+      const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.15, 1.25, 0.28, 32),
+        new THREE.MeshStandardMaterial({
+          color: 0x2a2a2a,
+          roughness: 0.55,
+          metalness: 0.35
+        })
+      );
+      base.position.set(0, 0.08, 0);
+      base.castShadow = true;
+      base.receiveShadow = true;
+      group.add(base);
+
+      const top = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.85, 0.9, 0.22, 32),
+        new THREE.MeshStandardMaterial({
+          color: 0xff3333,
+          emissive: 0x661111,
+          emissiveIntensity: 0.35,
+          roughness: 0.35,
+          metalness: 0.05
+        })
+      );
+      top.position.set(0, 0.32, 0);
+      top.castShadow = true;
+      top.receiveShadow = true;
+      group.add(top);
+      group.userData.top = top;
+
+      const light = new THREE.PointLight(0xff4444, 1.5, 7);
+      light.position.set(0, 0.9, 0);
+      group.add(light);
+      group.userData.light = light;
+
+      group.position.copy(spawnButton.position);
+      scene.add(group);
+      spawnButton.mesh = group;
+
+      // ボタン自体は動かない固定物として扱う。見た目は円柱、判定は薄い固定Box。
+      createStaticBox(
+        new THREE.Vector3(spawnButton.position.x, spawnButton.position.y + 0.06, spawnButton.position.z),
+        new THREE.Vector3(2.2, 0.28, 2.2),
+        0x5a1414,
+        { name: "spawnButtonBase", friction: 0.25, restitution: 0.01 }
+      );
+    }
+
+    function spawnRandomBreakableFromSky(position = getRandomSpawnHighPosition()) {
+      const r = Math.random();
+      let obj;
+
+      if (r < 0.45) {
+        obj = createDynamicBox({
+          position,
+          size: new THREE.Vector3(rand(0.9, 1.7), rand(0.9, 1.7), rand(0.9, 1.7)),
+          color: [0xc98b43, 0x7cc0ff, 0xffd36b, 0xff8aad, 0xb493ff][Math.floor(rand(0, 5))],
+          mass: rand(0.8, 2.3),
+          hp: rand(35, 75),
+          score: 50,
+          name: "箱",
+          breakable: true
+        });
+      } else if (r < 0.7) {
+        obj = createDynamicBox({
+          position,
+          size: new THREE.Vector3(0.35, 2.4, 1.4),
+          color: 0xffee55,
+          mass: 1.2,
+          hp: 45,
+          score: 80,
+          name: "板",
+          breakable: true
+        });
+      } else if (r < 0.9) {
+        obj = createDynamicBox({
+          position,
+          size: new THREE.Vector3(2.8, 1.0, 4.5),
+          color: [0xff5544, 0x4477ff, 0xffff66, 0x66ff99, 0xffffff][Math.floor(rand(0, 5))],
+          mass: 5,
+          hp: 720,
+          score: 220,
+          name: "車っぽい物体",
+          breakable: true,
+          visualType: "car"
+        });
+      } else {
+        obj = createDynamicBox({
+          position,
+          size: new THREE.Vector3(1.4, 1.4, 1.4),
+          color: 0xff2222,
+          mass: 2,
+          hp: 450,
+          score: 180,
+          name: "あやしい赤箱",
+          breakable: true,
+          visualType: "dangerBox"
+        });
+        obj.explosive = true;
+      }
+
+      protectBreakableUntilGrounded(obj);
+      return obj;
+    }
+
+    function spawnRandomNPCFromSky(type) {
+      const position = getRandomNPCHighPosition();
+
+      if (type === "dog") {
+        return createNPC({
+          type: "dog",
+          name: "犬",
+          position,
+          color: Math.random() < 0.5 ? 0xb07a45 : 0xd6b17a,
+          radius: 0.45,
+          height: 0.9,
+          speed: rand(5.0, 5.8),
+          wanderRadius: rand(10, 14)
+        });
+      }
+
+      return createNPC({
+        type: "human",
+        name: "人",
+        position,
+        color: [0x4f8cff, 0xff7a7a, 0x8be06a, 0xffc857][Math.floor(rand(0, 4))],
+        speed: rand(3.9, 4.6),
+        wanderRadius: rand(10, 13)
+      });
+    }
+
+    function spawnFromButton() {
+      const r = Math.random();
+
+      if (r < 0.70) {
+        spawnRandomBreakableFromSky();
+        showMessage("ボタン効果 ： オブジェクト 出現！");
+      } else if (r < 0.85) {
+        spawnRandomNPCFromSky("human");
+        showMessage("ボタン効果 ： 人 が 出現！");
+      } else {
+        spawnRandomNPCFromSky("dog");
+        showMessage("ボタン効果 ： 犬 が 出現！");
+      }
+    }
+
+    function updateSpawnButton(delta) {
+      if (!spawnButton.mesh) return;
+
+      spawnButton.cooldown = Math.max(0, spawnButton.cooldown - delta);
+      spawnButton.pressAnim = Math.max(0, spawnButton.pressAnim - delta * 4);
+
+      const playerPos = cannonToThreeVec3(player.body.position);
+      const horizontalDistance = Math.hypot(
+        playerPos.x - spawnButton.position.x,
+        playerPos.z - spawnButton.position.z
+      );
+
+      const nearButtonHeight = Math.abs(playerPos.y - spawnButton.position.y) < 2.3;
+
+      if (state.started && spawnButton.cooldown <= 0 && horizontalDistance < 1.75 && nearButtonHeight) {
+        spawnButton.cooldown = 1.6;
+        spawnButton.pressAnim = 1.0;
+        spawnFromButton();
+      }
+
+      const top = spawnButton.mesh.userData.top;
+      if (top) {
+        top.position.y = 0.32 - spawnButton.pressAnim * 0.14;
+      }
+
+      const light = spawnButton.mesh.userData.light;
+      if (light) {
+        light.intensity = 1.3 + spawnButton.pressAnim * 2.6 + Math.sin(clock.elapsedTime * 4) * 0.2;
+      }
+    }
+
     function createMapProps() {
       // 道路
       const road = new THREE.Mesh(
@@ -1194,6 +1420,11 @@
       road.position.set(-18, 0.04, 0);
       road.receiveShadow = true;
       scene.add(road);
+
+      // 道路の白線
+      // テクスチャ内の線だとUVの都合で中央からずれたり片側だけに見えるため、
+      // 専用の薄いBoxを道路の上に配置して、中央線と左右端線を正確に出す。
+      createRoadMarkings(-18, 0.11, 0, 14, 105);
 
       // スロープ
       createStaticBox(new THREE.Vector3(16, 0.55, -10), new THREE.Vector3(8, 1.1, 7), 0x9f7b4f);
@@ -1327,6 +1558,9 @@ createStaticBox(
 
       // 茶色の大きい高台の上に伝説の剣を配置
       createLegendarySword(new THREE.Vector3(36, 11.25, 28));
+
+      // 反対側の灰色高台の上にスポーンボタンを配置
+      createSpawnButton();
     }
 
     // =========================================================
@@ -1850,7 +2084,9 @@ createStaticBox(
         ? new THREE.Vector3(0.9, 0.7, 1.1)
         : new THREE.Vector3(0.75, 1.55, 0.75);
 
-      const spawnY = bodySize.y / 2 + 0.04;
+      const spawnY = position.y > 1
+        ? position.y
+        : bodySize.y / 2 + 0.04;
       const spawnPosition = new THREE.Vector3(position.x, spawnY, position.z);
 
       mesh.position.copy(spawnPosition);
@@ -1941,6 +2177,58 @@ createStaticBox(
 
     function getRandomNPCHighPosition() {
       return new THREE.Vector3(rand(-42, 42), rand(14, 22), rand(-42, 42));
+    }
+
+    function getRandomSpawnHighPosition() {
+      return new THREE.Vector3(rand(-42, 42), rand(16, 24), rand(-42, 42));
+    }
+
+    function protectBreakableUntilGrounded(obj, duration = 9.0) {
+      if (!obj || !obj.breakable) return;
+      obj.spawnProtectedUntilGrounded = true;
+      obj.spawnProtectionTimer = duration;
+      obj.body.wakeUp();
+    }
+
+    function isBreakableSettledOnSurface(obj) {
+      if (!obj || !obj.body || !obj.size) return false;
+
+      const from = new CANNON.Vec3(
+        obj.body.position.x,
+        obj.body.position.y,
+        obj.body.position.z
+      );
+
+      const rayLength = Math.max(obj.size.y / 2 + 0.45, 0.9);
+      const to = new CANNON.Vec3(
+        obj.body.position.x,
+        obj.body.position.y - rayLength,
+        obj.body.position.z
+      );
+
+      const ray = new CANNON.Ray(from, to);
+      const result = new CANNON.RaycastResult();
+
+      ray.intersectWorld(world, {
+        mode: CANNON.Ray.CLOSEST,
+        result,
+        skipBackfaces: false
+      });
+
+      return result.hasHit &&
+        result.body !== obj.body &&
+        Math.abs(obj.body.velocity.y) < 1.4;
+    }
+
+    function updateBreakableSpawnProtection(obj, delta) {
+      if (!obj || !obj.spawnProtectedUntilGrounded) return;
+
+      obj.spawnProtectionTimer = Math.max(0, (obj.spawnProtectionTimer || 0) - delta);
+
+      if (isBreakableSettledOnSurface(obj) || obj.spawnProtectionTimer <= 0) {
+        obj.spawnProtectedUntilGrounded = false;
+        obj.spawnProtectionTimer = 0;
+      }
     }
 
     function createNPCs() {
@@ -2194,6 +2482,8 @@ createStaticBox(
         colorHex: color,
         // 車はタイヤが地面に埋まりやすいため、見た目だけ少し上に補正する
         visualYOffset: visualType === "car" ? size.y * 0.28 : 0,
+        spawnProtectedUntilGrounded: false,
+        spawnProtectionTimer: 0,
         destroyed: false,
         lastHitTime: 0
       };
@@ -2216,6 +2506,12 @@ createStaticBox(
 
       // ゲーム開始直後は、落下による初期衝突で破壊・スコア加算しない
       if (state.startProtectionTimer > 0) {
+        return;
+      }
+
+      // 高い位置から再出現・スポーンした破壊可能オブジェクトは、
+      // 地面や足場に落ち着くまでは壊れないようにする
+      if (obj.spawnProtectedUntilGrounded) {
         return;
       }
 
@@ -2798,8 +3094,8 @@ createStaticBox(
 
       if (keys.forward) inputY -= 1;
       if (keys.back) inputY += 1;
-      if (keys.left) inputX -= 1;
-      if (keys.right) inputX += 1;
+      if (keys.left) inputX += 1;
+      if (keys.right) inputX -= 1;
 
       if (Math.abs(joystick.x) > 0.05 || Math.abs(joystick.y) > 0.05) {
         // スマホスティック用
@@ -3054,9 +3350,11 @@ createStaticBox(
           );
 
           if (obj.breakable) {
-            obj.hp -= impulsePower * 3.0;
-            if (obj.hp <= 0) {
-              destroyObject(obj, impulsePower);
+            if (!obj.spawnProtectedUntilGrounded) {
+              obj.hp -= impulsePower * 3.0;
+              if (obj.hp <= 0) {
+                destroyObject(obj, impulsePower);
+              }
             }
             // 頭突きで当てただけではスコア加算しない
           }
@@ -3789,7 +4087,7 @@ createStaticBox(
       }
     }
 
-    function syncObjects() {
+    function syncObjects(delta) {
       for (const obj of gameObjects) {
         if (!obj.mesh || !obj.body) continue;
 
@@ -3813,11 +4111,20 @@ createStaticBox(
           }
         }
 
-        // 遠くへ落ちすぎた物は戻す
-        if (obj.body.position.y < -20) {
-          obj.body.position.set(rand(-20, 20), rand(4, 10), rand(-20, 20));
+        updateBreakableSpawnProtection(obj, delta);
+
+        // 破壊可能オブジェクトがマップ外へ落下した場合は、
+        // ランダムな高い位置から再出現させる。着地までは破壊保護をかける。
+        if (obj.breakable && obj.body.position.y < FALL_RESET_Y) {
+          const respawnPosition = getRandomSpawnHighPosition();
+          obj.body.position.set(respawnPosition.x, respawnPosition.y, respawnPosition.z);
           obj.body.velocity.set(0, 0, 0);
           obj.body.angularVelocity.set(0, 0, 0);
+          obj.body.force.set(0, 0, 0);
+          obj.body.torque.set(0, 0, 0);
+          obj.body.quaternion.set(0, 0, 0, 1);
+          obj.body.wakeUp();
+          protectBreakableUntilGrounded(obj);
         }
       }
     }
@@ -3906,11 +4213,12 @@ createStaticBox(
         updateMessage(delta);
         updateCamera(delta);
         updateExplosionEffects(delta);
+        updateSpawnButton(delta);
         cleanupTooManyDebris();
 
         world.step(fixedTimeStep, delta, maxSubSteps);
 
-        syncObjects();
+        syncObjects(delta);
         animateNPCMeshes(delta);
 
         // プレイヤーが落ちたら復帰
