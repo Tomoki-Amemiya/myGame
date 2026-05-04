@@ -220,6 +220,37 @@
       transform: translateX(-50%) translateY(4px);
     }
 
+    #missionClearToast {
+      position: fixed;
+      top: 120px;
+      left: 50%;
+      transform: translateX(-50%) scale(0.96);
+      z-index: 80;
+      min-width: 280px;
+      max-width: 88vw;
+      padding: 16px 22px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(255, 232, 95, 0.96), rgba(255, 152, 67, 0.96));
+      color: #2b1600;
+      text-align: center;
+      font-weight: 900;
+      box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    #missionClearToast.show {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+
+    #missionClearToast .small {
+      margin-top: 4px;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
     #controls {
       position: fixed;
       inset: 0;
@@ -444,6 +475,7 @@
     </div>
 
     <div id="message"></div>
+    <div id="missionClearToast"></div>
   </div>
 
   <div id="controls">
@@ -502,6 +534,7 @@
     const missionListEl = document.getElementById("missionList");
     const missionCloseButtonEl = document.getElementById("missionCloseButton");
     const messageEl = document.getElementById("message");
+    const missionClearToastEl = document.getElementById("missionClearToast");
     const startOverlay = document.getElementById("startOverlay");
     const startButton = document.getElementById("startButton");
 
@@ -610,6 +643,8 @@
       dash: false
     };
 
+    const PLAYER_START_POSITION = new THREE.Vector3(0, 4, 0);
+
     const joystick = {
       active: false,
       pointerId: null,
@@ -624,6 +659,9 @@
     // ランダム移動するNPC
     // gameObjectsにも登録するため、既存のベロ・頭突き対象として扱える
     const npcs = [];
+
+    // 爆発エフェクト
+    const explosionEffects = [];
 
     // =========================================================
     //  汎用関数
@@ -641,6 +679,26 @@
       messageEl.textContent = text;
       messageEl.classList.add("show");
       state.messageTimer = 1.8;
+    }
+
+    function showMissionClearToast(title, reward, count = 1) {
+      if (!missionClearToastEl) return;
+
+      const titleText = count > 1
+        ? `MISSION CLEAR x${count}`
+        : `MISSION CLEAR`;
+
+      missionClearToastEl.innerHTML = `
+        <div>${titleText}</div>
+        <div>${title}</div>
+        <div class="small">追加報酬 +${reward}</div>
+      `;
+
+      missionClearToastEl.classList.add("show");
+
+      setTimeout(() => {
+        missionClearToastEl.classList.remove("show");
+      }, 2600);
     }
 
     function updateMessage(delta) {
@@ -753,7 +811,7 @@
     // =========================================================
 
     function createGround() {
-      const groundGeo = new THREE.PlaneGeometry(120, 120, 12, 12);
+      const groundGeo = new THREE.PlaneGeometry(110, 110, 12, 12);
       const groundMat = new THREE.MeshStandardMaterial({
         color: 0x6fc05d,
         roughness: 0.9,
@@ -765,25 +823,59 @@
       ground.receiveShadow = true;
       scene.add(ground);
 
+      // 物理地面は無限Planeではなく、有限のBoxにする。
+      // これにより、外側の水色部分へ出た場合は落下する。
       const groundBody = new CANNON.Body({
         mass: 0,
+        type: CANNON.Body.STATIC,
         material: groundMaterial,
-        shape: new CANNON.Plane()
+        shape: new CANNON.Box(new CANNON.Vec3(55, 0.1, 55))
       });
-      groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+
+      groundBody.position.set(0, -0.1, 0);
+      groundBody.allowSleep = false;
       world.addBody(groundBody);
 
-      const grid = new THREE.GridHelper(120, 40, 0xffffff, 0xffffff);
+      const grid = new THREE.GridHelper(110, 40, 0xffffff, 0xffffff);
       grid.material.opacity = 0.12;
       grid.material.transparent = true;
       scene.add(grid);
     }
 
     function createBoundary() {
-      const wallMaterial = new THREE.MeshStandardMaterial({
-        color: 0x6a8f5a,
-        roughness: 0.8
-      });
+      // 外枠は createStaticBox で統一して作成する。
+      // 以前の厚さ1の壁だと、高速移動時に1方向だけ抜けることがあるため、
+      // 厚めの壁にして4方向すべての当たり判定を安定化する。
+      const wallColor = 0x5d8050;
+
+      createStaticBox(
+        new THREE.Vector3(0, 2, -56),
+        new THREE.Vector3(114, 4, 3),
+        wallColor,
+        { name: "boundaryBack", friction: 0.2, restitution: 0.02 }
+      );
+
+      createStaticBox(
+        new THREE.Vector3(0, 2, 56),
+        new THREE.Vector3(114, 4, 3),
+        wallColor,
+        { name: "boundaryFront", friction: 0.2, restitution: 0.02 }
+      );
+
+      createStaticBox(
+        new THREE.Vector3(-56, 2, 0),
+        new THREE.Vector3(3, 4, 114),
+        wallColor,
+        { name: "boundaryLeft", friction: 0.2, restitution: 0.02 }
+      );
+
+      createStaticBox(
+        new THREE.Vector3(56, 2, 0),
+        new THREE.Vector3(3, 4, 114),
+        wallColor,
+        { name: "boundaryRight", friction: 0.2, restitution: 0.02 }
+      );
+    }
 
       const wallConfigs = [
         { pos: [0, 1.5, -55], size: [110, 3, 1] },
@@ -1130,7 +1222,11 @@ createStaticBox(
     player.mesh.scale.set(1.1, 1.1, 1.1);
     scene.add(player.mesh);
 
-    player.body.position.set(0, 3, 0);
+    player.body.position.set(
+      PLAYER_START_POSITION.x,
+      PLAYER_START_POSITION.y,
+      PLAYER_START_POSITION.z
+    );
     player.body.updateMassProperties();
     world.addBody(player.body);
     
@@ -1301,18 +1397,18 @@ createStaticBox(
 
       // 上に「！」っぽいマーク
       const exclamationBar = new THREE.Mesh(
-        new THREE.BoxGeometry(size.x * 0.12, size.y * 0.55, size.z * 0.12),
+        new THREE.BoxGeometry(size.x * 0.08, size.y * 0.34, size.z * 0.08),
         markMat
       );
-      exclamationBar.position.set(0, size.y * 0.95, 0);
+      exclamationBar.position.set(0, size.y * 1.18, 0);
       exclamationBar.castShadow = true;
       group.add(exclamationBar);
 
       const exclamationDot = new THREE.Mesh(
-        new THREE.SphereGeometry(size.x * 0.12, 12, 12),
+        new THREE.SphereGeometry(size.x * 0.075, 12, 12),
         markMat
       );
-      exclamationDot.position.set(0, size.y * 0.55, 0);
+      exclamationDot.position.set(0, size.y * 0.93, 0);
       exclamationDot.castShadow = true;
       group.add(exclamationDot);
 
@@ -1775,8 +1871,9 @@ createStaticBox(
 
       if (impact > 9) {
         obj.hp -= impact * 0.7;
-        addScore(4, obj.mesh.position);
 
+        // 衝突しただけではスコア加算しない。
+        // スコアは破壊時の destroyObject 側でのみ加算する。
         if (obj.hp <= 0) {
           destroyObject(obj, impact);
         }
@@ -1910,9 +2007,87 @@ createStaticBox(
       }
     }
 
+    function createExplosionEffect(position) {
+      const group = new THREE.Group();
+      group.position.copy(position);
+      scene.add(group);
+
+      const colors = [0xffee55, 0xff7a22, 0xff2222, 0xffffff];
+
+      for (let i = 0; i < 34; i++) {
+        const radius = rand(0.08, 0.22);
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(radius, 10, 10),
+          new THREE.MeshBasicMaterial({
+            color: colors[i % colors.length],
+            transparent: true,
+            opacity: 0.95
+          })
+        );
+
+        const dir = new THREE.Vector3(
+          rand(-1, 1),
+          rand(0.1, 1.2),
+          rand(-1, 1)
+        ).normalize();
+
+        mesh.position.set(0, 0, 0);
+        mesh.userData.velocity = dir.multiplyScalar(rand(5, 14));
+        mesh.userData.life = rand(0.45, 0.9);
+
+        group.add(mesh);
+      }
+
+      const light = new THREE.PointLight(0xff7722, 5.0, 18);
+      light.position.set(0, 1.2, 0);
+      group.add(light);
+
+      explosionEffects.push({
+        group,
+        light,
+        age: 0,
+        life: 0.95
+      });
+    }
+
+    function updateExplosionEffects(delta) {
+      for (let i = explosionEffects.length - 1; i >= 0; i--) {
+        const effect = explosionEffects[i];
+        effect.age += delta;
+
+        for (const child of effect.group.children) {
+          if (child.isMesh) {
+            child.position.addScaledVector(child.userData.velocity, delta);
+            child.userData.velocity.y -= 10 * delta;
+
+            const remain = Math.max(0, 1 - effect.age / effect.life);
+            child.material.opacity = remain;
+            child.scale.setScalar(1 + effect.age * 1.8);
+          }
+        }
+
+        if (effect.light) {
+          effect.light.intensity = Math.max(0, 5.0 * (1 - effect.age / effect.life));
+        }
+
+        if (effect.age >= effect.life) {
+          scene.remove(effect.group);
+          effect.group.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+          });
+          explosionEffects.splice(i, 1);
+        }
+      }
+    }
+
     function explodeAt(position, power = 10, radius = 8) {
       showMessage("ドカーン！");
-      addScore(250, position);
+      createExplosionEffect(position);
+      screenShake(0.35, 0.45);
+
+      // 爆発しただけではスコア加算しない。
+      // スコアは赤箱を破壊した destroyObject 側で加算する。
 
       for (const obj of [...gameObjects]) {
         const objPos = cannonToThreeVec3(obj.body.position);
@@ -2466,29 +2641,30 @@ createStaticBox(
           const impulsePower = 10 + Math.max(0, 4.2 - distance) * 3.5;
           obj.body.wakeUp();
 
-          // NPCは破壊不能のまま、頭突きで気持ちよく吹き飛ぶようにする
-          if (obj.isNPC) {
-            const npcImpulsePower = impulsePower * (obj.npcType === "dog" ? 1.7 : 1.45);
-            const upwardPower = obj.npcType === "dog" ? 6.8 : 7.8;
+        if (obj.isNPC) {
+          // NPCは破壊不能。ただし、頭突きでは派手に吹き飛ばす。
+          const npcImpulsePower = impulsePower * (obj.npcType === "dog" ? 3.4 : 3.0);
+          const upwardPower = obj.npcType === "dog" ? 11.5 : 12.5;
 
-            obj.stunTimer = 1.25;
-            obj.isWalking = false;
+          obj.stunTimer = 2.0;
+          obj.isWalking = false;
 
-            obj.body.velocity.x *= 0.35;
-            obj.body.velocity.z *= 0.35;
+          obj.body.wakeUp();
+          obj.body.velocity.set(0, 0, 0);
+          obj.body.angularVelocity.set(0, 0, 0);
 
-            obj.body.applyImpulse(
-              new CANNON.Vec3(
-                forward.x * npcImpulsePower,
-                upwardPower,
-                forward.z * npcImpulsePower
-              ),
-              obj.body.position
-            );
+          obj.body.applyImpulse(
+            new CANNON.Vec3(
+              forward.x * npcImpulsePower,
+              upwardPower,
+              forward.z * npcImpulsePower
+            ),
+            obj.body.position
+          );
 
-            addScore(15, obj.mesh.position);
-            continue;
-          }
+          // 頭突きしただけではスコア加算しない
+          continue;
+        }
 
           obj.body.applyImpulse(
             new CANNON.Vec3(
@@ -2503,9 +2679,8 @@ createStaticBox(
             obj.hp -= impulsePower * 3.0;
             if (obj.hp <= 0) {
               destroyObject(obj, impulsePower);
-            } else {
-              addScore(20, obj.mesh.position);
             }
+            // 頭突きで当てただけではスコア加算しない
           }
         }
       }
@@ -2528,7 +2703,11 @@ createStaticBox(
         releaseLick();
       }
 
-      player.body.position.set(0, 4, 0);
+      player.body.position.set(
+        PLAYER_START_POSITION.x,
+        PLAYER_START_POSITION.y,
+        PLAYER_START_POSITION.z
+      );
       player.body.velocity.set(0, -0.1, 0);
       player.body.angularVelocity.set(0, 0, 0);
       player.body.quaternion.set(0, 0, 0, 1);
@@ -2878,8 +3057,10 @@ createStaticBox(
         }
 
         if (newlyCompleted.length === 1) {
+          showMissionClearToast(newlyCompleted[0].title, newlyCompleted[0].reward, 1);
           showMessage(`MISSION CLEAR：${newlyCompleted[0].title} +${newlyCompleted[0].reward}`);
         } else {
+          showMissionClearToast("複数ミッション達成", totalReward, newlyCompleted.length);
           showMessage(`MISSION CLEAR x${newlyCompleted.length} +${totalReward}`);
         }
       }
@@ -2942,6 +3123,22 @@ createStaticBox(
       missionOverlayEl.classList.add("hidden");
     }
 
+    function resetNPC(npc) {
+      const resetY = npc.size.y / 2 + 0.08;
+
+      npc.body.position.set(npc.home.x, resetY, npc.home.z);
+      npc.body.velocity.set(0, 0, 0);
+      npc.body.angularVelocity.set(0, 0, 0);
+      npc.body.force.set(0, 0, 0);
+      npc.body.torque.set(0, 0, 0);
+      npc.body.quaternion.set(0, 0, 0, 1);
+      npc.body.wakeUp();
+
+      npc.stunTimer = 0;
+      npc.isWalking = false;
+      chooseNewNPCTarget(npc);
+    }
+
     // =========================================================
     //  同期・掃除
     // =========================================================
@@ -2968,15 +3165,10 @@ createStaticBox(
           continue;
         }
 
-        // 落下しすぎた場合はホーム付近へ戻す
-        if (npc.body.position.y < -10) {
-          const resetY = npc.size.y / 2 + 0.08;
-          npc.body.position.set(npc.home.x, resetY, npc.home.z);
-          npc.body.velocity.set(0, 0, 0);
-          npc.body.angularVelocity.set(0, 0, 0);
-          chooseNewNPCTarget(npc);
+        // 落下しすぎた場合は初期位置へ戻す
+        if (npc.body.position.y < -4) {
+          resetNPC(npc);
           npc.retargetTimer = rand(2.0, 4.0);
-          npc.isWalking = false;
           continue;
         }
 
@@ -3227,6 +3419,7 @@ createStaticBox(
         updateCombo(delta);
         updateMessage(delta);
         updateCamera(delta);
+        updateExplosionEffects(delta);
         cleanupTooManyDebris();
 
         world.step(fixedTimeStep, delta, maxSubSteps);
@@ -3235,8 +3428,9 @@ createStaticBox(
         animateNPCMeshes(delta);
 
         // プレイヤーが落ちたら復帰
-        if (player.body.position.y < -20) {
+        if (player.body.position.y < -4) {
           resetPlayer();
+          showMessage("落下！初期位置に戻りました");
         }
       } else {
         updateCamera(delta);
