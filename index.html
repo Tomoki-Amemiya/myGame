@@ -561,8 +561,17 @@
 
     world.addContactMaterial(
       new CANNON.ContactMaterial(bouncyMaterial, groundMaterial, {
-        friction: 0.55,
-        restitution: 0.45
+        // プレイヤーが地面や段差で不自然に跳ねるのを抑える
+        friction: 0.85,
+        restitution: 0.04
+      })
+    );
+
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(bouncyMaterial, defaultMaterial, {
+        // プレイヤーが箱・車・板・NPCなどに触れた時の跳ね上がりを抑える
+        friction: 0.75,
+        restitution: 0.03
       })
     );
 
@@ -1503,28 +1512,34 @@ createStaticBox(
         wanderRadius = 12
       } = options;
 
-      const mesh = type === "dog"
+      const isDog = type === "dog";
+
+      const mesh = isDog
         ? createDogMesh(color)
         : createHumanMesh(color);
 
-      // NPCは最初から地面に接地した高さで生成する
-      // CANNON.Sphere の中心Yは radius 付近が地面接地位置
-      const spawnY = radius + 0.04;
+      // NPCの物理判定を球ではなく箱にする
+      // 球だと地面で転がる/浮く/引っかかるように見えやすいため
+      const bodySize = isDog
+        ? new THREE.Vector3(0.9, 0.7, 1.1)
+        : new THREE.Vector3(0.75, 1.55, 0.75);
+
+      const spawnY = bodySize.y / 2 + 0.04;
       const spawnPosition = new THREE.Vector3(position.x, spawnY, position.z);
 
       mesh.position.copy(spawnPosition);
       enableShadowForObject3D(mesh);
       scene.add(mesh);
 
-      // ベロでつかめるようにDynamic Bodyにする。
-      // 破壊不能なのでbreakableはfalse。
       const body = new CANNON.Body({
-        mass: type === "dog" ? 1.4 : 2.4,
+        mass: isDog ? 1.4 : 2.4,
         material: defaultMaterial,
-        linearDamping: 0.12,
-        angularDamping: 0.75,
+        linearDamping: 0.05,
+        angularDamping: 0.95,
         fixedRotation: true,
-        shape: new CANNON.Sphere(radius)
+        shape: new CANNON.Box(
+          new CANNON.Vec3(bodySize.x / 2, bodySize.y / 2, bodySize.z / 2)
+        )
       });
 
       body.position.set(spawnPosition.x, spawnPosition.y, spawnPosition.z);
@@ -1535,7 +1550,7 @@ createStaticBox(
       const npc = {
         mesh,
         body,
-        size: new THREE.Vector3(radius * 2, height, radius * 2),
+        size: bodySize.clone(),
         hp: 999999,
         maxHp: 999999,
         score: 0,
@@ -1547,7 +1562,6 @@ createStaticBox(
         isNPC: true,
         npcType: type,
 
-        // home/targetはX/Zだけ使う
         home: new THREE.Vector3(position.x, 0, position.z),
         target: new THREE.Vector3(position.x, 0, position.z),
 
@@ -1559,8 +1573,11 @@ createStaticBox(
         stunTimer: 0,
         retargetTimer: rand(2.0, 4.0),
 
-        // 犬はメッシュの足が少し浮きやすいため、見た目だけ少し下げる
-        visualYOffset: type === "dog" ? -0.22 : 0
+        // アニメーション判定を物理速度だけに依存させない
+        isWalking: false,
+
+        // 見た目の足元補正
+        visualYOffset: isDog ? -0.28 : -0.04
       };
 
       body.userData = npc;
@@ -2156,6 +2173,14 @@ createStaticBox(
 
       checkGrounded();
 
+      // 接地中にオブジェクト接触などで上方向へ跳ねすぎるのを抑える
+      // ジャンプ直後は jumpCooldown が残るので、この補正をかけない
+      if (state.isGrounded && state.jumpCooldown <= 0 && state.dashTime <= 0) {
+        if (player.body.velocity.y > 1.2) {
+          player.body.velocity.y *= 0.35;
+        }
+      }
+
       let inputX = 0;
       let inputY = 0;
 
@@ -2345,6 +2370,7 @@ createStaticBox(
             const upwardPower = obj.npcType === "dog" ? 6.8 : 7.8;
 
             obj.stunTimer = 1.25;
+            obj.isWalking = false;
 
             obj.body.velocity.x *= 0.35;
             obj.body.velocity.z *= 0.35;
@@ -2826,13 +2852,15 @@ createStaticBox(
 
         // ベロで掴まれている間は自力移動しない
         if (state.lickTarget === npc) {
+          npc.isWalking = false;
           npc.walkAnimTime += delta * 5;
           npc.stunTimer = Math.max(npc.stunTimer, 0.25);
           continue;
         }
 
-        // 頭突きなどで吹き飛ばされた直後は、しばらく自律移動しない
+        // 頭突きなどで吹き飛ばされた直後は、自律移動で速度を上書きしない
         if (npc.stunTimer > 0) {
+          npc.isWalking = false;
           npc.stunTimer = Math.max(0, npc.stunTimer - delta);
           npc.walkAnimTime += delta * 8;
           continue;
@@ -2840,12 +2868,13 @@ createStaticBox(
 
         // 落下しすぎた場合はホーム付近へ戻す
         if (npc.body.position.y < -10) {
-          const resetY = npc.npcType === "dog" ? 0.49 : 0.59;
+          const resetY = npc.size.y / 2 + 0.08;
           npc.body.position.set(npc.home.x, resetY, npc.home.z);
           npc.body.velocity.set(0, 0, 0);
           npc.body.angularVelocity.set(0, 0, 0);
           chooseNewNPCTarget(npc);
           npc.retargetTimer = rand(2.0, 4.0);
+          npc.isWalking = false;
           continue;
         }
 
@@ -2861,12 +2890,12 @@ createStaticBox(
 
         const distance = toTarget.length();
 
-        // 目的地に近い、または一定時間経ったら次の目的地へ
         if (distance < 1.0 || npc.retargetTimer <= 0) {
           npc.waitTimer -= delta;
+          npc.isWalking = false;
 
-          npc.body.velocity.x *= 0.75;
-          npc.body.velocity.z *= 0.75;
+          npc.body.velocity.x *= 0.6;
+          npc.body.velocity.z *= 0.6;
 
           if (npc.waitTimer <= 0 || npc.retargetTimer <= 0) {
             chooseNewNPCTarget(npc);
@@ -2878,20 +2907,24 @@ createStaticBox(
 
         const dir = toTarget.normalize();
 
+        // 速度を少し上げ、地面摩擦に負けないようにする
         const npcSpeed = npc.npcType === "dog"
-          ? npc.speed
-          : npc.speed;
+          ? npc.speed * 1.25
+          : npc.speed * 1.15;
 
-        // 地上を歩くNPCなので、X/Z速度を毎フレーム確実に設定する
         npc.body.velocity.x = dir.x * npcSpeed;
         npc.body.velocity.z = dir.z * npcSpeed;
 
-        // 前回の上方向補助は、浮きや接地不安定の原因になりやすいので入れない
-        // ただし落下しすぎないように下方向だけ制限する
+        // 上下方向は物理に任せる。浮き上がりだけ軽く抑える
+        if (npc.body.velocity.y > 0.5) {
+          npc.body.velocity.y *= 0.45;
+        }
+
         npc.body.velocity.y = Math.max(npc.body.velocity.y, -7);
 
         npc.visualYaw = Math.atan2(dir.x, dir.z);
-        npc.walkAnimTime += delta * (npc.npcType === "dog" ? 11 : 8);
+        npc.walkAnimTime += delta * (npc.npcType === "dog" ? 12 : 9);
+        npc.isWalking = true;
       }
     }
 
@@ -2901,15 +2934,14 @@ createStaticBox(
 
         syncMeshWithBody(npc.mesh, npc.body);
 
-        // 見た目だけの接地補正
+        // 見た目だけの足元補正
         npc.mesh.position.y += npc.visualYOffset || 0;
 
         // 進行方向へ向ける
         npc.mesh.rotation.set(0, npc.visualYaw + Math.PI, 0);
 
-        const speedXZ = Math.hypot(npc.body.velocity.x, npc.body.velocity.z);
         const walking =
-          speedXZ > 0.25 &&
+          npc.isWalking &&
           state.lickTarget !== npc &&
           npc.stunTimer <= 0;
 
@@ -2927,13 +2959,13 @@ createStaticBox(
 
           if (npc.npcType === "human") {
             // 人型：腕と足を前後に振る
-            const swing = Math.sin(t) * 0.55;
+            const swing = Math.sin(t) * 0.75;
 
             if (parts.leftArm) parts.leftArm.rotation.x = swing;
             if (parts.rightArm) parts.rightArm.rotation.x = -swing;
 
-            if (parts.leftLeg) parts.leftLeg.rotation.x = -swing * 0.85;
-            if (parts.rightLeg) parts.rightLeg.rotation.x = swing * 0.85;
+            if (parts.leftLeg) parts.leftLeg.rotation.x = -swing * 0.75;
+            if (parts.rightLeg) parts.rightLeg.rotation.x = swing * 0.75;
 
             if (parts.head) {
               parts.head.position.y = 1.28 + Math.abs(Math.sin(t)) * 0.025;
@@ -2944,7 +2976,7 @@ createStaticBox(
 
           if (npc.npcType === "dog") {
             // 犬型：前足と後ろ足を交互に振る
-            const swing = Math.sin(t) * 0.45;
+            const swing = Math.sin(t) * 0.65;
             const opposite = -swing;
 
             if (parts.frontLeftLeg) parts.frontLeftLeg.rotation.x = swing;
