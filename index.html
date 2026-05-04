@@ -1593,8 +1593,8 @@ createStaticBox(
         // アニメーション判定を物理速度だけに依存させない
         isWalking: false,
 
-        // 見た目の足元補正
-        visualYOffset: isDog ? -0.28 : -0.04
+        // NPCの見た目だけ上下補正する
+        visualYOffset: isDog ? -0.16 : -0.18
       };
 
       body.userData = npc;
