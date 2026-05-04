@@ -1046,15 +1046,19 @@ createStaticBox(
         roughness: 0.7
       });
 
+      const parts = {};
+
       const body = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.75, 1.8), bodyMat);
       body.position.set(0, 0, 0);
       body.castShadow = true;
       group.add(body);
+      parts.body = body;
 
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.62, 0.85), bodyMat);
       head.position.set(0, 0.32, -1.08);
       head.castShadow = true;
       group.add(head);
+      parts.head = head;
 
       const snout = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.32, 0.36), bodyMat);
       snout.position.set(0, 0.22, -1.68);
@@ -1071,25 +1075,37 @@ createStaticBox(
       rightHorn.position.x = 0.23;
       group.add(rightHorn);
 
-      const legPositions = [
-        [-0.43, -0.62, -0.55],
-        [0.43, -0.62, -0.55],
-        [-0.43, -0.62, 0.58],
-        [0.43, -0.62, 0.58]
-      ];
+      // 脚：体との接続部分を支点にする
+      const legGeo = new THREE.BoxGeometry(0.22, 0.9, 0.22);
 
-      for (const p of legPositions) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.9, 0.22), darkMat);
-        leg.position.set(p[0], p[1], p[2]);
+      function makeGoatLegPivot(x, z) {
+        const pivot = new THREE.Group();
+        pivot.position.set(x, -0.2, z);
+
+        const leg = new THREE.Mesh(legGeo, darkMat);
+        leg.position.set(0, -0.45, 0);
         leg.castShadow = true;
-        group.add(leg);
+
+        pivot.add(leg);
+        group.add(pivot);
+
+        return pivot;
       }
+
+      parts.frontLeftLegPivot = makeGoatLegPivot(-0.43, -0.55);
+      parts.frontRightLegPivot = makeGoatLegPivot(0.43, -0.55);
+      parts.backLeftLegPivot = makeGoatLegPivot(-0.43, 0.58);
+      parts.backRightLegPivot = makeGoatLegPivot(0.43, 0.58);
 
       const tail = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.55, 8), bodyMat);
       tail.position.set(0, 0.25, 1.05);
       tail.rotation.x = Math.PI / 2;
       tail.castShadow = true;
       group.add(tail);
+      parts.tail = tail;
+
+      group.userData.parts = parts;
+      group.userData.walkAnimTime = 0;
 
       return group;
     }
@@ -1100,8 +1116,8 @@ createStaticBox(
         mass: 4,
         material: bouncyMaterial,
         fixedRotation: true,
-        linearDamping: 0.22,
-        angularDamping: 0.8,
+        linearDamping: 0.32,
+        angularDamping: 0.95,
         shape: new CANNON.Sphere(0.72)
       }),
       visualYaw: 0
@@ -1338,7 +1354,6 @@ createStaticBox(
 
       const parts = {};
 
-      // 胴体
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.0, 0.32), bodyMat);
       body.position.set(0, 0.6, 0);
       body.castShadow = true;
@@ -1346,7 +1361,6 @@ createStaticBox(
       group.add(body);
       parts.body = body;
 
-      // 頭
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), skinMat);
       head.position.set(0, 1.28, 0);
       head.castShadow = true;
@@ -1354,46 +1368,56 @@ createStaticBox(
       group.add(head);
       parts.head = head;
 
-      // 髪
       const hair = new THREE.Mesh(new THREE.SphereGeometry(0.285, 16, 8), darkMat);
       hair.position.set(0, 1.38, 0);
       hair.scale.set(1, 0.45, 1);
       hair.castShadow = true;
       group.add(hair);
 
-      // 腕
+      // 腕：肩を支点にする
       const armGeo = new THREE.BoxGeometry(0.18, 0.78, 0.18);
 
+      const leftArmPivot = new THREE.Group();
+      leftArmPivot.position.set(-0.43, 0.98, 0);
       const leftArm = new THREE.Mesh(armGeo, skinMat);
-      leftArm.position.set(-0.43, 0.62, 0);
+      leftArm.position.set(0, -0.39, 0);
       leftArm.castShadow = true;
-      group.add(leftArm);
+      leftArmPivot.add(leftArm);
+      group.add(leftArmPivot);
 
+      const rightArmPivot = new THREE.Group();
+      rightArmPivot.position.set(0.43, 0.98, 0);
       const rightArm = new THREE.Mesh(armGeo, skinMat);
-      rightArm.position.set(0.43, 0.62, 0);
+      rightArm.position.set(0, -0.39, 0);
       rightArm.castShadow = true;
-      group.add(rightArm);
+      rightArmPivot.add(rightArm);
+      group.add(rightArmPivot);
 
-      parts.leftArm = leftArm;
-      parts.rightArm = rightArm;
+      parts.leftArmPivot = leftArmPivot;
+      parts.rightArmPivot = rightArmPivot;
 
-      // 足
+      // 足：股関節を支点にする
       const legGeo = new THREE.BoxGeometry(0.18, 0.72, 0.2);
 
+      const leftLegPivot = new THREE.Group();
+      leftLegPivot.position.set(-0.16, 0.18, 0);
       const leftLeg = new THREE.Mesh(legGeo, darkMat);
-      leftLeg.position.set(-0.16, -0.15, 0);
+      leftLeg.position.set(0, -0.36, 0);
       leftLeg.castShadow = true;
-      group.add(leftLeg);
+      leftLegPivot.add(leftLeg);
+      group.add(leftLegPivot);
 
+      const rightLegPivot = new THREE.Group();
+      rightLegPivot.position.set(0.16, 0.18, 0);
       const rightLeg = new THREE.Mesh(legGeo, darkMat);
-      rightLeg.position.set(0.16, -0.15, 0);
+      rightLeg.position.set(0, -0.36, 0);
       rightLeg.castShadow = true;
-      group.add(rightLeg);
+      rightLegPivot.add(rightLeg);
+      group.add(rightLegPivot);
 
-      parts.leftLeg = leftLeg;
-      parts.rightLeg = rightLeg;
+      parts.leftLegPivot = leftLegPivot;
+      parts.rightLegPivot = rightLegPivot;
 
-      // 鼻
       const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.12), skinMat);
       nose.position.set(0, 1.28, -0.27);
       nose.castShadow = true;
@@ -1419,7 +1443,6 @@ createStaticBox(
 
       const parts = {};
 
-      // 胴体
       const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.55, 0.55), bodyMat);
       body.position.set(0, 0.38, 0);
       body.castShadow = true;
@@ -1427,7 +1450,6 @@ createStaticBox(
       group.add(body);
       parts.body = body;
 
-      // 頭
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.42, 0.5), bodyMat);
       head.position.set(0, 0.55, -0.67);
       head.castShadow = true;
@@ -1435,13 +1457,11 @@ createStaticBox(
       group.add(head);
       parts.head = head;
 
-      // 鼻
       const snout = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.26), darkMat);
       snout.position.set(0, 0.5, -1.02);
       snout.castShadow = true;
       group.add(snout);
 
-      // 耳
       const earGeo = new THREE.BoxGeometry(0.14, 0.34, 0.12);
 
       const leftEar = new THREE.Mesh(earGeo, darkMat);
@@ -1459,35 +1479,28 @@ createStaticBox(
       parts.leftEar = leftEar;
       parts.rightEar = rightEar;
 
-      // 足
+      // 犬の足：体との接続部を支点にする
       const legGeo = new THREE.BoxGeometry(0.14, 0.45, 0.14);
 
-      const frontLeftLeg = new THREE.Mesh(legGeo, darkMat);
-      frontLeftLeg.position.set(-0.38, 0.05, -0.25);
-      frontLeftLeg.castShadow = true;
-      group.add(frontLeftLeg);
+      function makeDogLegPivot(x, z) {
+        const pivot = new THREE.Group();
+        pivot.position.set(x, 0.24, z);
 
-      const frontRightLeg = new THREE.Mesh(legGeo, darkMat);
-      frontRightLeg.position.set(0.38, 0.05, -0.25);
-      frontRightLeg.castShadow = true;
-      group.add(frontRightLeg);
+        const leg = new THREE.Mesh(legGeo, darkMat);
+        leg.position.set(0, -0.225, 0);
+        leg.castShadow = true;
 
-      const backLeftLeg = new THREE.Mesh(legGeo, darkMat);
-      backLeftLeg.position.set(-0.38, 0.05, 0.25);
-      backLeftLeg.castShadow = true;
-      group.add(backLeftLeg);
+        pivot.add(leg);
+        group.add(pivot);
 
-      const backRightLeg = new THREE.Mesh(legGeo, darkMat);
-      backRightLeg.position.set(0.38, 0.05, 0.25);
-      backRightLeg.castShadow = true;
-      group.add(backRightLeg);
+        return pivot;
+      }
 
-      parts.frontLeftLeg = frontLeftLeg;
-      parts.frontRightLeg = frontRightLeg;
-      parts.backLeftLeg = backLeftLeg;
-      parts.backRightLeg = backRightLeg;
+      parts.frontLeftLegPivot = makeDogLegPivot(-0.38, -0.25);
+      parts.frontRightLegPivot = makeDogLegPivot(0.38, -0.25);
+      parts.backLeftLegPivot = makeDogLegPivot(-0.38, 0.25);
+      parts.backRightLegPivot = makeDogLegPivot(0.38, 0.25);
 
-      // しっぽ
       const tail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.55), bodyMat);
       tail.position.set(0, 0.58, 0.65);
       tail.rotation.x = -0.55;
@@ -2165,6 +2178,54 @@ createStaticBox(
       return { forward, right };
     }
 
+    function animateGoatLegs(delta, isMoving) {
+      const parts = player.mesh.userData.parts || {};
+
+      if (!player.mesh.userData.walkAnimTime) {
+        player.mesh.userData.walkAnimTime = 0;
+      }
+
+      if (isMoving && state.isGrounded && state.dashTime <= 0) {
+        player.mesh.userData.walkAnimTime += delta * 10;
+      } else if (isMoving && state.dashTime > 0) {
+        player.mesh.userData.walkAnimTime += delta * 16;
+      }
+
+      const t = player.mesh.userData.walkAnimTime;
+      const swing = isMoving && state.isGrounded
+        ? Math.sin(t) * (state.dashTime > 0 ? 0.55 : 0.42)
+        : 0;
+
+      const opposite = -swing;
+
+      if (parts.frontLeftLegPivot) parts.frontLeftLegPivot.rotation.x = swing;
+      if (parts.backRightLegPivot) parts.backRightLegPivot.rotation.x = swing;
+
+      if (parts.frontRightLegPivot) parts.frontRightLegPivot.rotation.x = opposite;
+      if (parts.backLeftLegPivot) parts.backLeftLegPivot.rotation.x = opposite;
+
+      if (!isMoving || !state.isGrounded) {
+        const resetSpeed = 0.18;
+
+        if (parts.frontLeftLegPivot) parts.frontLeftLegPivot.rotation.x *= 1 - resetSpeed;
+        if (parts.frontRightLegPivot) parts.frontRightLegPivot.rotation.x *= 1 - resetSpeed;
+        if (parts.backLeftLegPivot) parts.backLeftLegPivot.rotation.x *= 1 - resetSpeed;
+        if (parts.backRightLegPivot) parts.backRightLegPivot.rotation.x *= 1 - resetSpeed;
+      }
+
+      if (parts.head && isMoving && state.isGrounded) {
+        parts.head.position.y = 0.32 + Math.abs(Math.sin(t)) * 0.025;
+      } else if (parts.head) {
+        parts.head.position.y += (0.32 - parts.head.position.y) * 0.15;
+      }
+
+      if (parts.tail && isMoving && state.isGrounded) {
+        parts.tail.rotation.y = Math.sin(t * 0.7) * 0.12;
+      } else if (parts.tail) {
+        parts.tail.rotation.y *= 0.85;
+      }
+    }
+
     function updatePlayer(delta) {
       state.headbuttCooldown = Math.max(0, state.headbuttCooldown - delta);
       state.jumpCooldown = Math.max(0, state.jumpCooldown - delta);
@@ -2204,22 +2265,46 @@ createStaticBox(
       move.addScaledVector(right, inputX);
       move.addScaledVector(forward, -inputY);
 
+      let isPlayerMoving = false;
+
       if (move.lengthSq() > 0.001) {
         player.body.wakeUp();
 
         move.normalize();
 
-        // 通常の移動速度が遅めだったため少し速くする(元の値：0 ? 12.5 : 7.0;)
-        const speed = state.dashTime > 0 ? 16.5 : 11.2;
+        const speed = state.dashTime > 0 ? 14.5 : 9.2;
 
-        player.body.velocity.x = move.x * speed;
-        player.body.velocity.z = move.z * speed;
+        const targetVX = move.x * speed;
+        const targetVZ = move.z * speed;
+
+        // 速度を直接切り替えず、少し補間して段差や接触時の引っかかり感を減らす
+        const accel = state.dashTime > 0 ? 0.42 : 0.28;
+
+        player.body.velocity.x += (targetVX - player.body.velocity.x) * accel;
+        player.body.velocity.z += (targetVZ - player.body.velocity.z) * accel;
+
+        // 横速度が小さすぎる場合は少しだけ押して、段差や地面の摩擦に負けにくくする
+        const horizontalSpeed = Math.hypot(player.body.velocity.x, player.body.velocity.z);
+        if (horizontalSpeed < 1.8) {
+          player.body.velocity.x += move.x * 0.35;
+          player.body.velocity.z += move.z * 0.35;
+        }
+
+        // 接地中にオブジェクトや段差で跳ねすぎるのを抑える
+        if (state.isGrounded && state.jumpCooldown <= 0 && state.dashTime <= 0) {
+          if (player.body.velocity.y > 0.65) {
+            player.body.velocity.y *= 0.25;
+          }
+        }
 
         player.visualYaw = Math.atan2(move.x, move.z);
+        isPlayerMoving = true;
       } else {
-        player.body.velocity.x *= 0.88;
-        player.body.velocity.z *= 0.88;
+        player.body.velocity.x *= 0.84;
+        player.body.velocity.z *= 0.84;
       }
+
+      animateGoatLegs(delta, isPlayerMoving);
 
       syncMeshWithBody(player.mesh, player.body);
 
@@ -2961,11 +3046,11 @@ createStaticBox(
             // 人型：腕と足を前後に振る
             const swing = Math.sin(t) * 0.75;
 
-            if (parts.leftArm) parts.leftArm.rotation.x = swing;
-            if (parts.rightArm) parts.rightArm.rotation.x = -swing;
+            if (parts.leftArmPivot) parts.leftArmPivot.rotation.x = swing;
+            if (parts.rightArmPivot) parts.rightArmPivot.rotation.x = -swing;
 
-            if (parts.leftLeg) parts.leftLeg.rotation.x = -swing * 0.75;
-            if (parts.rightLeg) parts.rightLeg.rotation.x = swing * 0.75;
+            if (parts.leftLegPivot) parts.leftLegPivot.rotation.x = -swing * 0.75;
+            if (parts.rightLegPivot) parts.rightLegPivot.rotation.x = swing * 0.75;
 
             if (parts.head) {
               parts.head.position.y = 1.28 + Math.abs(Math.sin(t)) * 0.025;
@@ -2979,11 +3064,11 @@ createStaticBox(
             const swing = Math.sin(t) * 0.65;
             const opposite = -swing;
 
-            if (parts.frontLeftLeg) parts.frontLeftLeg.rotation.x = swing;
-            if (parts.backRightLeg) parts.backRightLeg.rotation.x = swing;
+            if (parts.frontLeftLegPivot) parts.frontLeftLegPivot.rotation.x = swing;
+            if (parts.backRightLegPivot) parts.backRightLegPivot.rotation.x = swing;
 
-            if (parts.frontRightLeg) parts.frontRightLeg.rotation.x = opposite;
-            if (parts.backLeftLeg) parts.backLeftLeg.rotation.x = opposite;
+            if (parts.frontRightLegPivot) parts.frontRightLegPivot.rotation.x = opposite;
+            if (parts.backLeftLegPivot) parts.backLeftLegPivot.rotation.x = opposite;
 
             if (parts.tail) {
               parts.tail.rotation.y = Math.sin(t * 1.6) * 0.45;
@@ -3004,15 +3089,15 @@ createStaticBox(
           // 停止時はパーツを自然に戻す
           npc.mesh.rotation.z *= 0.85;
 
-          if (parts.leftArm) parts.leftArm.rotation.x *= 0.8;
-          if (parts.rightArm) parts.rightArm.rotation.x *= 0.8;
-          if (parts.leftLeg) parts.leftLeg.rotation.x *= 0.8;
-          if (parts.rightLeg) parts.rightLeg.rotation.x *= 0.8;
+          if (parts.leftArmPivot) parts.leftArmPivot.rotation.x *= 0.8;
+          if (parts.rightArmPivot) parts.rightArmPivot.rotation.x *= 0.8;
+          if (parts.leftLegPivot) parts.leftLegPivot.rotation.x *= 0.8;
+          if (parts.rightLegPivot) parts.rightLegPivot.rotation.x *= 0.8;
 
-          if (parts.frontLeftLeg) parts.frontLeftLeg.rotation.x *= 0.8;
-          if (parts.frontRightLeg) parts.frontRightLeg.rotation.x *= 0.8;
-          if (parts.backLeftLeg) parts.backLeftLeg.rotation.x *= 0.8;
-          if (parts.backRightLeg) parts.backRightLeg.rotation.x *= 0.8;
+          if (parts.frontLeftLegPivot) parts.frontLeftLegPivot.rotation.x *= 0.8;
+          if (parts.frontRightLegPivot) parts.frontRightLegPivot.rotation.x *= 0.8;
+          if (parts.backLeftLegPivot) parts.backLeftLegPivot.rotation.x *= 0.8;
+          if (parts.backRightLegPivot) parts.backRightLegPivot.rotation.x *= 0.8;
 
           if (parts.tail) {
             parts.tail.rotation.y *= 0.8;
