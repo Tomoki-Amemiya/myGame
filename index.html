@@ -705,6 +705,15 @@
       mesh.quaternion.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w);
     }
 
+    function enableShadowForObject3D(object3d) {
+      object3d.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+    }
+
     // =========================================================
     //  ライト
     // =========================================================
@@ -842,32 +851,56 @@
       createStaticBox(new THREE.Vector3(14, 0.35, 8), new THREE.Vector3(4, 0.7, 4), 0xaaaaaa);
       createStaticBox(new THREE.Vector3(17.5, 0.75, 8), new THREE.Vector3(4, 1.5, 4), 0x9f9f9f);
 
-      // 建物風ブロック
-      createStaticBox(new THREE.Vector3(-36, 4, -24), new THREE.Vector3(12, 8, 12), 0xb7b7b7);
-      createStaticBox(new THREE.Vector3(36, 5, 28), new THREE.Vector3(14, 10, 14), 0xc1a078);
+      // =====================================================
+      // 大きい高台と階段
+      // すべて createStaticBox で作成し、見た目と当たり判定を一致させる
+      // =====================================================
 
-      // 高い建物へ登るための段差：左奥ブロック用
-      createStaticBox(new THREE.Vector3(-18, 0.4, -24), new THREE.Vector3(5, 0.8, 5), 0xc9c9c9);
-      createStaticBox(new THREE.Vector3(-22, 1.25, -24), new THREE.Vector3(5, 1.0, 5), 0xbfbfbf);
-      createStaticBox(new THREE.Vector3(-26, 2.1, -24), new THREE.Vector3(5, 1.0, 5), 0xb5b5b5);
-      createStaticBox(new THREE.Vector3(-30, 3.0, -24), new THREE.Vector3(5, 1.0, 5), 0xababab);
-      createStaticBox(new THREE.Vector3(-34, 3.9, -24), new THREE.Vector3(5, 1.0, 5), 0xa1a1a1);
-      createStaticBox(new THREE.Vector3(-38, 4.8, -24), new THREE.Vector3(5, 1.0, 5), 0x979797);
-      createStaticBox(new THREE.Vector3(-41, 5.8, -24), new THREE.Vector3(4, 1.0, 5), 0x8d8d8d);
-      createStaticBox(new THREE.Vector3(-41, 6.8, -24), new THREE.Vector3(4, 1.0, 5), 0x838383);
-      createStaticBox(new THREE.Vector3(-39, 7.6, -24), new THREE.Vector3(5, 0.8, 5), 0x797979);
+      // 茶色の大きい高台
+      // 上面Y = 5 + 10/2 = 10
+      createStaticBox(
+        new THREE.Vector3(36, 5, 28),
+        new THREE.Vector3(14, 10, 14),
+        0xc1a078
+      );
 
-      // 高い建物へ登るための段差：右奥ブロック用
-      createStaticBox(new THREE.Vector3(36, 0.4, 8), new THREE.Vector3(5, 0.8, 5), 0xd2b58f);
-      createStaticBox(new THREE.Vector3(36, 1.3, 12), new THREE.Vector3(5, 1.0, 5), 0xcbaa84);
-      createStaticBox(new THREE.Vector3(36, 2.2, 16), new THREE.Vector3(5, 1.0, 5), 0xc19f79);
-      createStaticBox(new THREE.Vector3(36, 3.1, 20), new THREE.Vector3(5, 1.0, 5), 0xb7946e);
-      createStaticBox(new THREE.Vector3(36, 4.0, 24), new THREE.Vector3(5, 1.0, 5), 0xad8963);
-      createStaticBox(new THREE.Vector3(36, 5.0, 28), new THREE.Vector3(5, 1.0, 5), 0xa37f59);
-      createStaticBox(new THREE.Vector3(36, 6.0, 32), new THREE.Vector3(5, 1.0, 5), 0x99744f);
-      createStaticBox(new THREE.Vector3(36, 7.0, 35), new THREE.Vector3(5, 1.0, 4), 0x8f6a45);
-      createStaticBox(new THREE.Vector3(36, 8.0, 34), new THREE.Vector3(5, 1.0, 4), 0x855f3b);
-      createStaticBox(new THREE.Vector3(36, 9.0, 31), new THREE.Vector3(5, 1.0, 4), 0x7b5632);
+      // 茶色高台用の階段
+      // 高台の手前側、Zをずらして、建物本体に貫通しない位置へ配置
+      createStaticBox(new THREE.Vector3(36, 0.35, 7),  new THREE.Vector3(6, 0.7, 5), 0xd8bd95);
+      createStaticBox(new THREE.Vector3(36, 1.20, 11), new THREE.Vector3(6, 0.8, 5), 0xd0b38a);
+      createStaticBox(new THREE.Vector3(36, 2.05, 15), new THREE.Vector3(6, 0.8, 5), 0xc8a87f);
+      createStaticBox(new THREE.Vector3(36, 2.90, 19), new THREE.Vector3(6, 0.8, 5), 0xc09d74);
+      createStaticBox(new THREE.Vector3(36, 3.75, 23), new THREE.Vector3(6, 0.8, 5), 0xb89269);
+      createStaticBox(new THREE.Vector3(36, 4.60, 27), new THREE.Vector3(6, 0.8, 5), 0xb0875e);
+      createStaticBox(new THREE.Vector3(36, 5.45, 31), new THREE.Vector3(6, 0.8, 5), 0xa87c53);
+      createStaticBox(new THREE.Vector3(36, 6.30, 35), new THREE.Vector3(6, 0.8, 5), 0xa07148);
+      createStaticBox(new THREE.Vector3(36, 7.15, 39), new THREE.Vector3(6, 0.8, 5), 0x98663d);
+      createStaticBox(new THREE.Vector3(36, 8.00, 43), new THREE.Vector3(6, 0.8, 5), 0x905b32);
+      createStaticBox(new THREE.Vector3(36, 8.85, 47), new THREE.Vector3(6, 0.8, 5), 0x885027);
+      createStaticBox(new THREE.Vector3(36, 9.65, 41), new THREE.Vector3(7, 0.7, 7), 0x80451c);
+
+      // 灰色の大きい高台
+      // 上面Y = 4 + 8/2 = 8
+      createStaticBox(
+        new THREE.Vector3(-36, 4, -24),
+        new THREE.Vector3(12, 8, 12),
+        0xb7b7b7
+      );
+
+      // 灰色高台用の階段
+      // 高台の右側から回り込んで登る配置。
+      // 高台本体と重ならないようにX方向へずらす。
+      createStaticBox(new THREE.Vector3(-18, 0.35, -24), new THREE.Vector3(5, 0.7, 5), 0xd0d0d0);
+      createStaticBox(new THREE.Vector3(-21, 1.10, -24), new THREE.Vector3(5, 0.8, 5), 0xc8c8c8);
+      createStaticBox(new THREE.Vector3(-24, 1.85, -24), new THREE.Vector3(5, 0.8, 5), 0xc0c0c0);
+      createStaticBox(new THREE.Vector3(-27, 2.60, -24), new THREE.Vector3(5, 0.8, 5), 0xb8b8b8);
+      createStaticBox(new THREE.Vector3(-30, 3.35, -24), new THREE.Vector3(5, 0.8, 5), 0xb0b0b0);
+      createStaticBox(new THREE.Vector3(-33, 4.10, -24), new THREE.Vector3(5, 0.8, 5), 0xa8a8a8);
+      createStaticBox(new THREE.Vector3(-36, 4.85, -18), new THREE.Vector3(5, 0.8, 5), 0xa0a0a0);
+      createStaticBox(new THREE.Vector3(-36, 5.60, -15), new THREE.Vector3(5, 0.8, 5), 0x989898);
+      createStaticBox(new THREE.Vector3(-36, 6.35, -12), new THREE.Vector3(5, 0.8, 5), 0x909090);
+      createStaticBox(new THREE.Vector3(-36, 7.10, -9),  new THREE.Vector3(5, 0.8, 5), 0x888888);
+      createStaticBox(new THREE.Vector3(-36, 7.75, -16), new THREE.Vector3(7, 0.7, 7), 0x808080);
 
       // 看板柱
       createStaticBox(new THREE.Vector3(4, 2, 22), new THREE.Vector3(0.5, 4, 0.5), 0x444444);
@@ -1080,6 +1113,94 @@
       return group;
     }
 
+    function createDangerBoxMesh(size, color) {
+      const group = new THREE.Group();
+
+      const boxMat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: 0x661111,
+        emissiveIntensity: 0.85,
+        roughness: 0.4,
+        metalness: 0.05
+      });
+
+      const edgeMat = new THREE.MeshStandardMaterial({
+        color: 0x220000,
+        emissive: 0xff2222,
+        emissiveIntensity: 0.35,
+        roughness: 0.5
+      });
+
+      const markMat = new THREE.MeshStandardMaterial({
+        color: 0xffff55,
+        emissive: 0xffff00,
+        emissiveIntensity: 0.8,
+        roughness: 0.3
+      });
+
+      // 本体
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x, size.y, size.z),
+        boxMat
+      );
+      body.castShadow = true;
+      body.receiveShadow = true;
+      group.add(body);
+
+      // 黒っぽい帯
+      const band1 = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x * 1.04, size.y * 0.18, size.z * 1.06),
+        edgeMat
+      );
+      band1.position.set(0, size.y * 0.18, 0);
+      group.add(band1);
+
+      const band2 = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x * 0.18, size.y * 1.05, size.z * 1.06),
+        edgeMat
+      );
+      band2.position.set(0, 0, 0);
+      group.add(band2);
+
+      // 上に「！」っぽいマーク
+      const exclamationBar = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x * 0.12, size.y * 0.55, size.z * 0.12),
+        markMat
+      );
+      exclamationBar.position.set(0, size.y * 0.95, 0);
+      exclamationBar.castShadow = true;
+      group.add(exclamationBar);
+
+      const exclamationDot = new THREE.Mesh(
+        new THREE.SphereGeometry(size.x * 0.12, 12, 12),
+        markMat
+      );
+      exclamationDot.position.set(0, size.y * 0.55, 0);
+      exclamationDot.castShadow = true;
+      group.add(exclamationDot);
+
+      // 赤い光
+      const dangerLight = new THREE.PointLight(0xff2222, 1.4, 8);
+      dangerLight.position.set(0, size.y * 1.2, 0);
+      group.add(dangerLight);
+
+      // 少し大きい透明球で「光っている雰囲気」
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0xff2222,
+        transparent: true,
+        opacity: 0.14,
+        depthWrite: false
+      });
+
+      const glow = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.max(size.x, size.y, size.z) * 1.25, 24, 24),
+        glowMat
+      );
+      group.add(glow);
+
+      return group;
+    }
+
     function createDynamicBox(options) {
       const {
         position,
@@ -1097,6 +1218,8 @@
 
       if (visualType === "car") {
         mesh = createCarMesh(size, color);
+      } else if (visualType === "dangerBox") {
+        mesh = createDangerBoxMesh(size, color);
       } else {
         mesh = new THREE.Mesh(
           new THREE.BoxGeometry(size.x, size.y, size.z),
@@ -1112,6 +1235,7 @@
       }
 
       mesh.position.copy(position);
+      enableShadowForObject3D(mesh);
       scene.add(mesh);
 
       const body = new CANNON.Body({
@@ -1269,7 +1393,8 @@
         });
       }
 
-      // 看板・椅子風
+      // 板オブジェクト
+      // 破壊不能の固定看板と区別するため、名称は「板」にする
       for (let i = 0; i < 10; i++) {
         createDynamicBox({
           position: new THREE.Vector3(rand(-34, 34), 1.4, rand(-34, 34)),
@@ -1278,22 +1403,31 @@
           mass: 1.2,
           hp: 45,
           score: 80,
-          name: "看板",
+          name: "板",
           breakable: true
         });
       }
 
-      // 爆発箱風
-      for (let i = 0; i < 4; i++) {
+      // あやしい赤箱
+      // 通常の赤い箱ではなく、発光・！マーク付きで目立つようにする
+      const dangerPositions = [
+        new THREE.Vector3(8, 1.2, -18),
+        new THREE.Vector3(-8, 1.2, 18),
+        new THREE.Vector3(24, 1.2, 4),
+        new THREE.Vector3(-26, 1.2, -4)
+      ];
+
+      for (let i = 0; i < dangerPositions.length; i++) {
         const bomb = createDynamicBox({
-          position: new THREE.Vector3(rand(-24, 28), 1.2, rand(-24, 28)),
+          position: dangerPositions[i],
           size: new THREE.Vector3(1.4, 1.4, 1.4),
-          color: 0xff3333,
+          color: 0xff2222,
           mass: 2,
           hp: 40,
           score: 180,
           name: "あやしい赤箱",
-          breakable: true
+          breakable: true,
+          visualType: "dangerBox"
         });
 
         bomb.explosive = true;
@@ -2069,8 +2203,8 @@
       {
         id: "destroy10",
         title: "破壊入門",
-        desc: "箱・看板・車などを合計10個破壊する",
-        reward: 1000,
+        desc: "箱・板・車などを合計10個破壊する",
+        reward: 100,
         progressText: () => `${state.destroyedCount}/10`,
         check: () => state.destroyedCount >= 10
       },
@@ -2078,7 +2212,7 @@
         id: "score1000",
         title: "スコア1000点",
         desc: "スコアを1000点以上にする",
-        reward: 300,
+        reward: 100,
         progressText: () => `${state.score}/1000`,
         check: () => state.score >= 1000
       },
@@ -2086,7 +2220,7 @@
         id: "score3000",
         title: "スコア3000点",
         desc: "スコアを3000点以上にする",
-        reward: 600,
+        reward: 200,
         progressText: () => `${state.score}/3000`,
         check: () => state.score >= 3000
       },
@@ -2094,7 +2228,7 @@
         id: "score6000",
         title: "スコア6000点",
         desc: "スコアを6000点以上にする",
-        reward: 1200,
+        reward: 200,
         progressText: () => `${state.score}/6000`,
         check: () => state.score >= 6000
       },
@@ -2102,25 +2236,33 @@
         id: "destroyCars",
         title: "車クラッシャー",
         desc: "車っぽい物体を2台破壊する",
-        reward: 800,
+        reward: 100,
         progressText: () => `${state.destroyedByName["車っぽい物体"] || 0}/2`,
         check: () => (state.destroyedByName["車っぽい物体"] || 0) >= 2
       },
       {
-        id: "destroySigns",
-        title: "看板荒らし",
-        desc: "看板を5枚破壊する",
-        reward: 500,
-        progressText: () => `${state.destroyedByName["看板"] || 0}/5`,
-        check: () => (state.destroyedByName["看板"] || 0) >= 5
+        id: "destroyBoards",
+        title: "板クラッシャー",
+        desc: "黄色い板を5枚破壊する",
+        reward: 100,
+        progressText: () => `${state.destroyedByName["板"] || 0}/5`,
+        check: () => (state.destroyedByName["板"] || 0) >= 5
       },
       {
         id: "destroyBomb",
         title: "赤箱注意",
         desc: "あやしい赤箱を1個破壊する",
-        reward: 700,
+        reward: 300,
         progressText: () => `${state.destroyedByName["あやしい赤箱"] || 0}/1`,
         check: () => (state.destroyedByName["あやしい赤箱"] || 0) >= 1
+      },
+      {
+        id: "score10000",
+        title: "スコア10000点",
+        desc: "スコアを10000点以上にする",
+        reward: 200,
+        progressText: () => `${state.score}/10000`,
+        check: () => state.score >= 10000
       }
     ];
 
