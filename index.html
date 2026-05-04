@@ -1,56 +1,1749 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>スマホ用ミニゲーム</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>めちゃくちゃヤギ物理ゲーム</title>
+
   <style>
+    html,
     body {
       margin: 0;
-      font-family: sans-serif;
-      text-align: center;
-      background: #f5f5f5;
+      padding: 0;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      background: #87ceeb;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      touch-action: none;
       user-select: none;
     }
 
-    h1 {
-      margin-top: 40px;
+    #game {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.65);
+      z-index: 10;
+    }
+
+    #topBar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    #scorePanel,
+    #missionPanel,
+    #helpPanel {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 12px;
+      padding: 10px 12px;
+      backdrop-filter: blur(4px);
+    }
+
+    #scorePanel {
+      min-width: 135px;
     }
 
     #score {
-      font-size: 48px;
-      margin: 30px;
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.1;
     }
 
-    button {
-      font-size: 28px;
-      padding: 24px 40px;
-      border-radius: 16px;
+    #combo {
+      margin-top: 4px;
+      font-size: 14px;
+      color: #ffe66d;
+    }
+
+    #missionPanel {
+      max-width: 45vw;
+      text-align: center;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    #missionTitle {
+      font-weight: 800;
+      color: #a8ffb0;
+      margin-bottom: 2px;
+    }
+
+    #helpPanel {
+      font-size: 12px;
+      line-height: 1.45;
+      max-width: 310px;
+    }
+
+    #message {
+      position: absolute;
+      top: 82px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 220px;
+      max-width: 80vw;
+      padding: 12px 16px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55);
+      text-align: center;
+      font-weight: 800;
+      opacity: 0;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    #message.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(4px);
+    }
+
+    #controls {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    #joystickArea {
+      position: absolute;
+      left: 22px;
+      bottom: 28px;
+      width: 142px;
+      height: 142px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.22);
+      border: 2px solid rgba(255, 255, 255, 0.32);
+      pointer-events: auto;
+      touch-action: none;
+    }
+
+    #joystickKnob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 58px;
+      height: 58px;
+      margin-left: -29px;
+      margin-top: -29px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+
+    #actionButtons {
+      position: absolute;
+      right: 18px;
+      bottom: 24px;
+      display: grid;
+      grid-template-columns: 74px 74px;
+      grid-template-rows: 74px 74px 74px;
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    .actionButton {
       border: none;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.84);
+      color: #111;
+      font-weight: 900;
+      font-size: 13px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.32);
+      touch-action: none;
+    }
+
+    .actionButton:active {
+      transform: scale(0.94);
+      background: white;
+    }
+
+    #btnJump {
+      grid-column: 2;
+      grid-row: 1;
+      background: rgba(124, 217, 255, 0.9);
+    }
+
+    #btnHeadbutt {
+      grid-column: 1;
+      grid-row: 2;
+      background: rgba(255, 230, 109, 0.92);
+    }
+
+    #btnLick {
+      grid-column: 2;
+      grid-row: 2;
+      background: rgba(255, 139, 179, 0.92);
+    }
+
+    #btnDash {
+      grid-column: 1;
+      grid-row: 3;
+      background: rgba(168, 255, 176, 0.92);
+    }
+
+    #btnReset {
+      grid-column: 2;
+      grid-row: 3;
+      background: rgba(255, 170, 122, 0.92);
+    }
+
+    #startOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.2), transparent 30%),
+        linear-gradient(180deg, #73c7ff, #87ceeb 42%, #89d06b 42%);
+      color: white;
+      text-align: center;
+    }
+
+    #startCard {
+      width: min(90vw, 560px);
+      padding: 24px;
+      border-radius: 24px;
+      background: rgba(0, 0, 0, 0.42);
+      border: 1px solid rgba(255, 255, 255, 0.32);
+      box-shadow: 0 12px 50px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(6px);
+    }
+
+    #startCard h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+    }
+
+    #startCard p {
+      margin: 8px 0;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    #startButton {
+      margin-top: 18px;
+      border: none;
+      border-radius: 999px;
+      padding: 16px 36px;
+      font-size: 20px;
+      font-weight: 900;
       background: #4caf50;
       color: white;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
 
-    button:active {
+    #startButton:active {
       transform: scale(0.96);
+    }
+
+    .floatingScore {
+      position: fixed;
+      z-index: 30;
+      color: #fff36d;
+      font-weight: 900;
+      font-size: 22px;
+      text-shadow: 0 2px 5px black;
+      pointer-events: none;
+      animation: floatScore 0.9s ease-out forwards;
+    }
+
+    @keyframes floatScore {
+      0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -120%) scale(1.3);
+      }
+    }
+
+    @media (max-width: 760px) {
+      #helpPanel {
+        display: none;
+      }
+
+      #missionPanel {
+        max-width: 55vw;
+        font-size: 12px;
+      }
+
+      #score {
+        font-size: 22px;
+      }
+
+      #joystickArea {
+        width: 132px;
+        height: 132px;
+        left: 16px;
+        bottom: 20px;
+      }
+
+      #actionButtons {
+        right: 12px;
+        bottom: 16px;
+        grid-template-columns: 68px 68px;
+        grid-template-rows: 68px 68px 68px;
+      }
+
+      .actionButton {
+        border-radius: 20px;
+        font-size: 12px;
+      }
     }
   </style>
 </head>
+
 <body>
-  <h1>タップゲーム</h1>
-  <div id="score">0</div>
-  <button id="tapButton">タップ！</button>
+  <canvas id="game"></canvas>
 
-  <script>
-    let score = 0;
+  <div id="hud">
+    <div id="topBar">
+      <div id="scorePanel">
+        <div>スコア</div>
+        <div id="score">0</div>
+        <div id="combo">COMBO x1.0</div>
+      </div>
 
-    const scoreText = document.getElementById("score");
-    const tapButton = document.getElementById("tapButton");
+      <div id="missionPanel">
+        <div id="missionTitle">MISSION</div>
+        <div id="missionText">箱を10個こわせ！</div>
+      </div>
 
-    tapButton.addEventListener("pointerdown", function () {
-      score++;
-      scoreText.textContent = score;
+      <div id="helpPanel">
+        <b>PC操作</b><br />
+        WASD：移動 / Space：ジャンプ<br />
+        E：頭突き / Q：ベロ / Shift：ダッシュ<br />
+        R：リセット / ドラッグ：カメラ回転
+      </div>
+    </div>
+
+    <div id="message"></div>
+  </div>
+
+  <div id="controls">
+    <div id="joystickArea">
+      <div id="joystickKnob"></div>
+    </div>
+
+    <div id="actionButtons">
+      <button id="btnJump" class="actionButton">JUMP</button>
+      <button id="btnHeadbutt" class="actionButton">頭突き</button>
+      <button id="btnLick" class="actionButton">ベロ</button>
+      <button id="btnDash" class="actionButton">DASH</button>
+      <button id="btnReset" class="actionButton">RESET</button>
+    </div>
+  </div>
+
+  <div id="startOverlay">
+    <div id="startCard">
+      <h1>めちゃくちゃヤギ物理ゲーム</h1>
+      <p>
+        ヤギ風キャラを操作して、箱・車・看板を吹き飛ばそう。<br />
+        頭突き、ジャンプ、ベロつかみ、物理破壊入りの3Dミニゲームです。
+      </p>
+      <p>
+        スマホ：左スティックで移動、右ボタンでアクション。<br />
+        PC：WASD / Space / E / Q / Shift / R。
+      </p>
+      <button id="startButton">START</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+    import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js";
+
+    // =========================================================
+    //  基本設定
+    // =========================================================
+
+    const canvas = document.getElementById("game");
+    const scoreEl = document.getElementById("score");
+    const comboEl = document.getElementById("combo");
+    const missionTextEl = document.getElementById("missionText");
+    const messageEl = document.getElementById("message");
+    const startOverlay = document.getElementById("startOverlay");
+    const startButton = document.getElementById("startButton");
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: "high-performance"
     });
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 45, 120);
+
+    const camera = new THREE.PerspectiveCamera(
+      65,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      500
+    );
+
+    const clock = new THREE.Clock();
+
+    const world = new CANNON.World({
+      gravity: new CANNON.Vec3(0, -9.82, 0)
+    });
+
+    world.allowSleep = true;
+    world.broadphase = new CANNON.SAPBroadphase(world);
+
+    const defaultMaterial = new CANNON.Material("default");
+    const groundMaterial = new CANNON.Material("ground");
+    const bouncyMaterial = new CANNON.Material("bouncy");
+
+    world.defaultContactMaterial = new CANNON.ContactMaterial(
+      defaultMaterial,
+      defaultMaterial,
+      {
+        friction: 0.45,
+        restitution: 0.28
+      }
+    );
+
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(defaultMaterial, groundMaterial, {
+        friction: 0.8,
+        restitution: 0.18
+      })
+    );
+
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(bouncyMaterial, groundMaterial, {
+        friction: 0.55,
+        restitution: 0.45
+      })
+    );
+
+    // =========================================================
+    //  ゲーム状態
+    // =========================================================
+
+    const state = {
+      started: false,
+      score: 0,
+      comboCount: 0,
+      comboMultiplier: 1,
+      comboTimer: 0,
+      destroyedCount: 0,
+      headbuttCooldown: 0,
+      jumpCooldown: 0,
+      dashTime: 0,
+      dashCooldown: 0,
+      cameraYaw: 0,
+      cameraPitch: 0.28,
+      isGrounded: false,
+      lickTarget: null,
+      lickLine: null,
+      missionCompleted: false,
+      messageTimer: 0
+    };
+
+    const keys = {
+      forward: false,
+      back: false,
+      left: false,
+      right: false,
+      jump: false,
+      dash: false
+    };
+
+    const joystick = {
+      active: false,
+      pointerId: null,
+      x: 0,
+      y: 0
+    };
+
+    const gameObjects = [];
+    const destructibles = [];
+
+    // =========================================================
+    //  汎用関数
+    // =========================================================
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function rand(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function showMessage(text) {
+      messageEl.textContent = text;
+      messageEl.classList.add("show");
+      state.messageTimer = 1.8;
+    }
+
+    function updateMessage(delta) {
+      if (state.messageTimer > 0) {
+        state.messageTimer -= delta;
+        if (state.messageTimer <= 0) {
+          messageEl.classList.remove("show");
+        }
+      }
+    }
+
+    function addScore(points, worldPosition) {
+      const gained = Math.round(points * state.comboMultiplier);
+      state.score += gained;
+      state.comboCount += 1;
+      state.comboTimer = 2.3;
+
+      if (state.comboCount >= 11) {
+        state.comboMultiplier = 3;
+      } else if (state.comboCount >= 6) {
+        state.comboMultiplier = 2;
+      } else if (state.comboCount >= 3) {
+        state.comboMultiplier = 1.5;
+      } else {
+        state.comboMultiplier = 1;
+      }
+
+      scoreEl.textContent = String(state.score);
+      comboEl.textContent = `COMBO x${state.comboMultiplier.toFixed(1)} / ${state.comboCount}`;
+
+      if (worldPosition) {
+        spawnFloatingScore(gained, worldPosition);
+      }
+    }
+
+    function updateCombo(delta) {
+      if (state.comboTimer > 0) {
+        state.comboTimer -= delta;
+        if (state.comboTimer <= 0) {
+          state.comboCount = 0;
+          state.comboMultiplier = 1;
+          comboEl.textContent = "COMBO x1.0";
+        }
+      }
+    }
+
+    function spawnFloatingScore(points, worldPosition) {
+      const projected = worldPosition.clone().project(camera);
+      const x = (projected.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-projected.y * 0.5 + 0.5) * window.innerHeight;
+
+      const el = document.createElement("div");
+      el.className = "floatingScore";
+      el.textContent = `+${points}`;
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      document.body.appendChild(el);
+
+      setTimeout(() => {
+        el.remove();
+      }, 950);
+    }
+
+    function cannonToThreeVec3(v) {
+      return new THREE.Vector3(v.x, v.y, v.z);
+    }
+
+    function threeToCannonVec3(v) {
+      return new CANNON.Vec3(v.x, v.y, v.z);
+    }
+
+    function syncMeshWithBody(mesh, body) {
+      mesh.position.set(body.position.x, body.position.y, body.position.z);
+      mesh.quaternion.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w);
+    }
+
+    // =========================================================
+    //  ライト
+    // =========================================================
+
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x557744, 2.0);
+    scene.add(hemiLight);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+    sun.position.set(18, 30, 12);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 2048;
+    sun.shadow.mapSize.height = 2048;
+    sun.shadow.camera.left = -45;
+    sun.shadow.camera.right = 45;
+    sun.shadow.camera.top = 45;
+    sun.shadow.camera.bottom = -45;
+    scene.add(sun);
+
+    // =========================================================
+    //  地面・フィールド
+    // =========================================================
+
+    function createGround() {
+      const groundGeo = new THREE.PlaneGeometry(120, 120, 12, 12);
+      const groundMat = new THREE.MeshStandardMaterial({
+        color: 0x6fc05d,
+        roughness: 0.9,
+        metalness: 0.0
+      });
+
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      const groundBody = new CANNON.Body({
+        mass: 0,
+        material: groundMaterial,
+        shape: new CANNON.Plane()
+      });
+      groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+      world.addBody(groundBody);
+
+      const grid = new THREE.GridHelper(120, 40, 0xffffff, 0xffffff);
+      grid.material.opacity = 0.12;
+      grid.material.transparent = true;
+      scene.add(grid);
+    }
+
+    function createBoundary() {
+      const wallMaterial = new THREE.MeshStandardMaterial({
+        color: 0x6a8f5a,
+        roughness: 0.8
+      });
+
+      const wallConfigs = [
+        { pos: [0, 1.5, -55], size: [110, 3, 1] },
+        { pos: [0, 1.5, 55], size: [110, 3, 1] },
+        { pos: [-55, 1.5, 0], size: [1, 3, 110] },
+        { pos: [55, 1.5, 0], size: [1, 3, 110] }
+      ];
+
+      for (const config of wallConfigs) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(config.size[0], config.size[1], config.size[2]),
+          wallMaterial
+        );
+        mesh.position.set(config.pos[0], config.pos[1], config.pos[2]);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+
+        const body = new CANNON.Body({
+          mass: 0,
+          material: defaultMaterial,
+          shape: new CANNON.Box(
+            new CANNON.Vec3(config.size[0] / 2, config.size[1] / 2, config.size[2] / 2)
+          )
+        });
+        body.position.set(config.pos[0], config.pos[1], config.pos[2]);
+        world.addBody(body);
+      }
+    }
+
+    function createStaticBox(position, size, color) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x, size.y, size.z),
+        new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.75
+        })
+      );
+      mesh.position.copy(position);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+
+      const body = new CANNON.Body({
+        mass: 0,
+        material: defaultMaterial,
+        shape: new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2))
+      });
+
+      body.position.set(position.x, position.y, position.z);
+      world.addBody(body);
+
+      return { mesh, body };
+    }
+
+    function createMapProps() {
+      // 道路
+      const road = new THREE.Mesh(
+        new THREE.BoxGeometry(14, 0.08, 105),
+        new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 })
+      );
+      road.position.set(-18, 0.04, 0);
+      road.receiveShadow = true;
+      scene.add(road);
+
+      // スロープ
+      createStaticBox(new THREE.Vector3(16, 0.55, -10), new THREE.Vector3(8, 1.1, 7), 0x9f7b4f);
+
+      // 小さな台
+      createStaticBox(new THREE.Vector3(22, 1, 8), new THREE.Vector3(7, 2, 7), 0x9a9a9a);
+      createStaticBox(new THREE.Vector3(28, 2, 8), new THREE.Vector3(5, 4, 5), 0x888888);
+
+      // 建物風ブロック
+      createStaticBox(new THREE.Vector3(-36, 4, -24), new THREE.Vector3(12, 8, 12), 0xb7b7b7);
+      createStaticBox(new THREE.Vector3(36, 5, 28), new THREE.Vector3(14, 10, 14), 0xc1a078);
+
+      // 看板柱
+      createStaticBox(new THREE.Vector3(4, 2, 22), new THREE.Vector3(0.5, 4, 0.5), 0x444444);
+      createStaticBox(new THREE.Vector3(4, 4.2, 22), new THREE.Vector3(5, 2, 0.4), 0xffda4f);
+    }
+
+    // =========================================================
+    //  プレイヤー
+    // =========================================================
+
+    function createGoatMesh() {
+      const group = new THREE.Group();
+
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0xf3f0df,
+        roughness: 0.7
+      });
+
+      const darkMat = new THREE.MeshStandardMaterial({
+        color: 0x333333,
+        roughness: 0.75
+      });
+
+      const hornMat = new THREE.MeshStandardMaterial({
+        color: 0xd7c49a,
+        roughness: 0.7
+      });
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.75, 1.8), bodyMat);
+      body.position.set(0, 0, 0);
+      body.castShadow = true;
+      group.add(body);
+
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.62, 0.85), bodyMat);
+      head.position.set(0, 0.32, -1.08);
+      head.castShadow = true;
+      group.add(head);
+
+      const snout = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.32, 0.36), bodyMat);
+      snout.position.set(0, 0.22, -1.68);
+      snout.castShadow = true;
+      group.add(snout);
+
+      const leftHorn = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.55, 8), hornMat);
+      leftHorn.position.set(-0.23, 0.82, -1.1);
+      leftHorn.rotation.x = -0.4;
+      leftHorn.castShadow = true;
+      group.add(leftHorn);
+
+      const rightHorn = leftHorn.clone();
+      rightHorn.position.x = 0.23;
+      group.add(rightHorn);
+
+      const legPositions = [
+        [-0.43, -0.62, -0.55],
+        [0.43, -0.62, -0.55],
+        [-0.43, -0.62, 0.58],
+        [0.43, -0.62, 0.58]
+      ];
+
+      for (const p of legPositions) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.9, 0.22), darkMat);
+        leg.position.set(p[0], p[1], p[2]);
+        leg.castShadow = true;
+        group.add(leg);
+      }
+
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.55, 8), bodyMat);
+      tail.position.set(0, 0.25, 1.05);
+      tail.rotation.x = Math.PI / 2;
+      tail.castShadow = true;
+      group.add(tail);
+
+      return group;
+    }
+
+    const player = {
+      mesh: createGoatMesh(),
+      body: new CANNON.Body({
+        mass: 4,
+        material: bouncyMaterial,
+        fixedRotation: true,
+        linearDamping: 0.22,
+        angularDamping: 0.8,
+        shape: new CANNON.Sphere(0.72)
+      }),
+      visualYaw: 0
+    };
+
+    player.mesh.scale.set(1.1, 1.1, 1.1);
+    scene.add(player.mesh);
+
+    player.body.position.set(0, 3, 0);
+    player.body.updateMassProperties();
+    world.addBody(player.body);
+
+    // =========================================================
+    //  物理オブジェクト生成
+    // =========================================================
+
+    function createDynamicBox(options) {
+      const {
+        position,
+        size,
+        color,
+        mass = 1,
+        hp = 50,
+        score = 50,
+        name = "box",
+        breakable = true
+      } = options;
+
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x, size.y, size.z),
+        new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.72,
+          metalness: 0.02
+        })
+      );
+
+      mesh.position.copy(position);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+
+      const body = new CANNON.Body({
+        mass,
+        material: defaultMaterial,
+        linearDamping: 0.08,
+        angularDamping: 0.06,
+        shape: new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2))
+      });
+
+      body.position.set(position.x, position.y, position.z);
+      body.allowSleep = true;
+      body.sleepSpeedLimit = 0.15;
+      body.sleepTimeLimit = 0.6;
+      world.addBody(body);
+
+      const obj = {
+        mesh,
+        body,
+        size,
+        hp,
+        maxHp: hp,
+        score,
+        name,
+        breakable,
+        destroyed: false,
+        lastHitTime: 0
+      };
+
+      body.userData = obj;
+      gameObjects.push(obj);
+      if (breakable) {
+        destructibles.push(obj);
+      }
+
+      body.addEventListener("collide", (event) => {
+        handleObjectCollision(obj, event);
+      });
+
+      return obj;
+    }
+
+    function handleObjectCollision(obj, event) {
+      if (!obj.breakable || obj.destroyed) return;
+
+      const relativeVelocity = event.contact.getImpactVelocityAlongNormal();
+      const impact = Math.abs(relativeVelocity) * obj.body.mass;
+
+      if (impact > 9) {
+        obj.hp -= impact * 0.7;
+        addScore(4, obj.mesh.position);
+
+        if (obj.hp <= 0) {
+          destroyObject(obj, impact);
+        }
+      }
+    }
+
+    function destroyObject(obj, impactPower = 16) {
+      if (obj.destroyed) return;
+      obj.destroyed = true;
+
+      state.destroyedCount += 1;
+      addScore(obj.score + impactPower * 2, obj.mesh.position);
+      updateMission();
+
+      const basePos = obj.mesh.position.clone();
+      const baseColor = obj.mesh.material.color.clone();
+
+      scene.remove(obj.mesh);
+      world.removeBody(obj.body);
+
+      // 元配列から削除
+      const idx = gameObjects.indexOf(obj);
+      if (idx >= 0) gameObjects.splice(idx, 1);
+
+      const dIdx = destructibles.indexOf(obj);
+      if (dIdx >= 0) destructibles.splice(dIdx, 1);
+
+      // 破片を生成
+      const pieceCount = clamp(Math.floor(rand(4, 8)), 4, 8);
+      for (let i = 0; i < pieceCount; i++) {
+        const s = rand(0.25, 0.55);
+        const piece = createDynamicBox({
+          position: new THREE.Vector3(
+            basePos.x + rand(-0.25, 0.25),
+            basePos.y + rand(0, 0.35),
+            basePos.z + rand(-0.25, 0.25)
+          ),
+          size: new THREE.Vector3(s, s, s),
+          color: baseColor.getHex(),
+          mass: 0.25,
+          hp: 9999,
+          score: 0,
+          name: "debris",
+          breakable: false
+        });
+
+        piece.body.velocity.set(rand(-3, 3), rand(3, 7), rand(-3, 3));
+        piece.body.angularVelocity.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+
+        setTimeout(() => {
+          if (piece.mesh.parent) scene.remove(piece.mesh);
+          if (piece.body.world) world.removeBody(piece.body);
+
+          const pIdx = gameObjects.indexOf(piece);
+          if (pIdx >= 0) gameObjects.splice(pIdx, 1);
+        }, 8000);
+      }
+
+      showMessage(`${obj.name}を破壊！`);
+    }
+
+    function createObjects() {
+      // 箱エリア
+      for (let i = 0; i < 26; i++) {
+        createDynamicBox({
+          position: new THREE.Vector3(rand(-12, 26), rand(1, 8), rand(-28, 28)),
+          size: new THREE.Vector3(rand(0.8, 1.7), rand(0.8, 1.7), rand(0.8, 1.7)),
+          color: [0xc98b43, 0x7cc0ff, 0xffd36b, 0xff8aad, 0xb493ff][i % 5],
+          mass: rand(0.7, 2.2),
+          hp: rand(35, 75),
+          score: 50,
+          name: "箱",
+          breakable: true
+        });
+      }
+
+      // 車風オブジェクト
+      for (let i = 0; i < 5; i++) {
+        createDynamicBox({
+          position: new THREE.Vector3(-18 + rand(-3, 3), 1.0, -30 + i * 14),
+          size: new THREE.Vector3(2.8, 1.0, 4.5),
+          color: [0xff5544, 0x4477ff, 0xffff66, 0x66ff99, 0xffffff][i % 5],
+          mass: 5,
+          hp: 180,
+          score: 220,
+          name: "車っぽい物体",
+          breakable: true
+        });
+      }
+
+      // 看板・椅子風
+      for (let i = 0; i < 10; i++) {
+        createDynamicBox({
+          position: new THREE.Vector3(rand(-34, 34), 1.4, rand(-34, 34)),
+          size: new THREE.Vector3(0.35, 2.4, 1.4),
+          color: 0xffee55,
+          mass: 1.2,
+          hp: 45,
+          score: 80,
+          name: "看板",
+          breakable: true
+        });
+      }
+
+      // 爆発箱風
+      for (let i = 0; i < 4; i++) {
+        const bomb = createDynamicBox({
+          position: new THREE.Vector3(rand(-24, 28), 1.2, rand(-24, 28)),
+          size: new THREE.Vector3(1.4, 1.4, 1.4),
+          color: 0xff3333,
+          mass: 2,
+          hp: 40,
+          score: 180,
+          name: "あやしい赤箱",
+          breakable: true
+        });
+
+        bomb.explosive = true;
+      }
+    }
+
+    function explodeAt(position, power = 10, radius = 8) {
+      showMessage("ドカーン！");
+      addScore(250, position);
+
+      for (const obj of [...gameObjects]) {
+        const objPos = cannonToThreeVec3(obj.body.position);
+        const distance = objPos.distanceTo(position);
+
+        if (distance < radius && obj.body.mass > 0) {
+          const dir = objPos.clone().sub(position).normalize();
+          const strength = (1 - distance / radius) * power;
+          obj.body.applyImpulse(
+            new CANNON.Vec3(dir.x * strength, strength * 0.9, dir.z * strength),
+            obj.body.position
+          );
+
+          if (obj.breakable && strength > 4) {
+            obj.hp -= strength * 8;
+            if (obj.hp <= 0) {
+              destroyObject(obj, strength);
+            }
+          }
+        }
+      }
+
+      const playerPos = cannonToThreeVec3(player.body.position);
+      const playerDistance = playerPos.distanceTo(position);
+
+      if (playerDistance < radius) {
+        const dir = playerPos.clone().sub(position).normalize();
+        const strength = (1 - playerDistance / radius) * power * 1.8;
+        player.body.applyImpulse(
+          new CANNON.Vec3(dir.x * strength, strength * 0.8, dir.z * strength),
+          player.body.position
+        );
+      }
+    }
+
+    // 爆発箱は destroy 時に爆発させるため、destroyObjectを少し拡張
+    const originalDestroyObject = destroyObject;
+    destroyObject = function patchedDestroyObject(obj, impactPower = 16) {
+      const wasExplosive = obj.explosive === true;
+      const pos = obj.mesh.position.clone();
+      originalDestroyObject(obj, impactPower);
+
+      if (wasExplosive) {
+        setTimeout(() => {
+          explodeAt(pos, 13, 9);
+        }, 40);
+      }
+    };
+
+    // =========================================================
+    //  操作
+    // =========================================================
+
+    const joystickArea = document.getElementById("joystickArea");
+    const joystickKnob = document.getElementById("joystickKnob");
+    const btnJump = document.getElementById("btnJump");
+    const btnHeadbutt = document.getElementById("btnHeadbutt");
+    const btnLick = document.getElementById("btnLick");
+    const btnDash = document.getElementById("btnDash");
+    const btnReset = document.getElementById("btnReset");
+
+    function setupControls() {
+      window.addEventListener("keydown", (event) => {
+        switch (event.code) {
+          case "KeyW":
+          case "ArrowUp":
+            keys.forward = true;
+            break;
+          case "KeyS":
+          case "ArrowDown":
+            keys.back = true;
+            break;
+          case "KeyA":
+          case "ArrowLeft":
+            keys.left = true;
+            break;
+          case "KeyD":
+          case "ArrowRight":
+            keys.right = true;
+            break;
+          case "Space":
+            jump();
+            break;
+          case "KeyE":
+            headbutt();
+            break;
+          case "KeyQ":
+            toggleLick();
+            break;
+          case "ShiftLeft":
+          case "ShiftRight":
+            startDash();
+            break;
+          case "KeyR":
+            resetPlayer();
+            break;
+        }
+      });
+
+      window.addEventListener("keyup", (event) => {
+        switch (event.code) {
+          case "KeyW":
+          case "ArrowUp":
+            keys.forward = false;
+            break;
+          case "KeyS":
+          case "ArrowDown":
+            keys.back = false;
+            break;
+          case "KeyA":
+          case "ArrowLeft":
+            keys.left = false;
+            break;
+          case "KeyD":
+          case "ArrowRight":
+            keys.right = false;
+            break;
+        }
+      });
+
+      joystickArea.addEventListener("pointerdown", (event) => {
+        joystick.active = true;
+        joystick.pointerId = event.pointerId;
+        joystickArea.setPointerCapture(event.pointerId);
+        updateJoystick(event);
+      });
+
+      joystickArea.addEventListener("pointermove", (event) => {
+        if (!joystick.active || event.pointerId !== joystick.pointerId) return;
+        updateJoystick(event);
+      });
+
+      joystickArea.addEventListener("pointerup", endJoystick);
+      joystickArea.addEventListener("pointercancel", endJoystick);
+
+      btnJump.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        jump();
+      });
+
+      btnHeadbutt.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        headbutt();
+      });
+
+      btnLick.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        toggleLick();
+      });
+
+      btnDash.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startDash();
+      });
+
+      btnReset.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        resetPlayer();
+      });
+
+      setupCameraDrag();
+    }
+
+    function updateJoystick(event) {
+      const rect = joystickArea.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = event.clientX - cx;
+      const dy = event.clientY - cy;
+      const max = rect.width * 0.36;
+
+      const length = Math.hypot(dx, dy);
+      const limited = Math.min(length, max);
+      const angle = Math.atan2(dy, dx);
+
+      const kx = Math.cos(angle) * limited;
+      const ky = Math.sin(angle) * limited;
+
+      joystick.x = kx / max;
+      joystick.y = ky / max;
+
+      joystickKnob.style.transform = `translate(${kx}px, ${ky}px)`;
+    }
+
+    function endJoystick(event) {
+      if (event.pointerId !== joystick.pointerId) return;
+      joystick.active = false;
+      joystick.pointerId = null;
+      joystick.x = 0;
+      joystick.y = 0;
+      joystickKnob.style.transform = "translate(0px, 0px)";
+    }
+
+    function setupCameraDrag() {
+      let dragging = false;
+      let pointerId = null;
+      let lastX = 0;
+      let lastY = 0;
+
+      canvas.addEventListener("pointerdown", (event) => {
+        if (event.target !== canvas) return;
+
+        dragging = true;
+        pointerId = event.pointerId;
+        lastX = event.clientX;
+        lastY = event.clientY;
+        canvas.setPointerCapture(pointerId);
+      });
+
+      canvas.addEventListener("pointermove", (event) => {
+        if (!dragging || event.pointerId !== pointerId) return;
+
+        const dx = event.clientX - lastX;
+        const dy = event.clientY - lastY;
+
+        lastX = event.clientX;
+        lastY = event.clientY;
+
+        state.cameraYaw -= dx * 0.006;
+        state.cameraPitch = clamp(state.cameraPitch + dy * 0.004, -0.05, 0.75);
+      });
+
+      canvas.addEventListener("pointerup", () => {
+        dragging = false;
+        pointerId = null;
+      });
+
+      canvas.addEventListener("pointercancel", () => {
+        dragging = false;
+        pointerId = null;
+      });
+    }
+
+    // =========================================================
+    //  プレイヤー操作処理
+    // =========================================================
+
+    function getCameraDirections() {
+      const forward = new THREE.Vector3(
+        Math.sin(state.cameraYaw),
+        0,
+        Math.cos(state.cameraYaw)
+      ).normalize();
+
+      const right = new THREE.Vector3(
+        Math.cos(state.cameraYaw),
+        0,
+        -Math.sin(state.cameraYaw)
+      ).normalize();
+
+      return { forward, right };
+    }
+
+    function updatePlayer(delta) {
+      state.headbuttCooldown = Math.max(0, state.headbuttCooldown - delta);
+      state.jumpCooldown = Math.max(0, state.jumpCooldown - delta);
+      state.dashCooldown = Math.max(0, state.dashCooldown - delta);
+      state.dashTime = Math.max(0, state.dashTime - delta);
+
+      checkGrounded();
+
+      let inputX = 0;
+      let inputY = 0;
+
+      if (keys.forward) inputY -= 1;
+      if (keys.back) inputY += 1;
+      if (keys.left) inputX -= 1;
+      if (keys.right) inputX += 1;
+
+      if (Math.abs(joystick.x) > 0.05 || Math.abs(joystick.y) > 0.05) {
+        inputX += joystick.x;
+        inputY += joystick.y;
+      }
+
+      inputX = clamp(inputX, -1, 1);
+      inputY = clamp(inputY, -1, 1);
+
+      const { forward, right } = getCameraDirections();
+
+      const move = new THREE.Vector3();
+      move.addScaledVector(right, inputX);
+      move.addScaledVector(forward, -inputY);
+
+      if (move.lengthSq() > 0.001) {
+        move.normalize();
+
+        const speed = state.dashTime > 0 ? 12.5 : 7.0;
+
+        player.body.velocity.x = move.x * speed;
+        player.body.velocity.z = move.z * speed;
+
+        player.visualYaw = Math.atan2(move.x, move.z);
+      } else {
+        player.body.velocity.x *= 0.88;
+        player.body.velocity.z *= 0.88;
+      }
+
+      syncMeshWithBody(player.mesh, player.body);
+
+      player.mesh.rotation.set(0, player.visualYaw, 0);
+
+      // ダッシュ中の少し派手な上下揺れ
+      if (state.dashTime > 0) {
+        player.mesh.scale.set(1.18, 1.08, 1.22);
+      } else {
+        player.mesh.scale.lerp(new THREE.Vector3(1.1, 1.1, 1.1), 0.15);
+      }
+
+      updateLick(delta);
+    }
+
+    function checkGrounded() {
+      const ray = new CANNON.Ray(
+        player.body.position,
+        new CANNON.Vec3(player.body.position.x, player.body.position.y - 1.05, player.body.position.z)
+      );
+
+      const result = new CANNON.RaycastResult();
+      ray.intersectWorld(world, {
+        mode: CANNON.Ray.CLOSEST,
+        result,
+        skipBackfaces: true
+      });
+
+      state.isGrounded = result.hasHit;
+    }
+
+    function jump() {
+      if (!state.started) return;
+      if (!state.isGrounded) return;
+      if (state.jumpCooldown > 0) return;
+
+      player.body.velocity.y = 7.2;
+      state.jumpCooldown = 0.25;
+      addScore(2, player.mesh.position);
+    }
+
+    function startDash() {
+      if (!state.started) return;
+      if (state.dashCooldown > 0) return;
+
+      state.dashTime = 0.8;
+      state.dashCooldown = 2.0;
+
+      const dir = new THREE.Vector3(Math.sin(player.visualYaw), 0, Math.cos(player.visualYaw));
+      player.body.applyImpulse(
+        new CANNON.Vec3(dir.x * 8, 1.0, dir.z * 8),
+        player.body.position
+      );
+
+      showMessage("ダッシュ！");
+    }
+
+    function headbutt() {
+      if (!state.started) return;
+      if (state.headbuttCooldown > 0) return;
+
+      state.headbuttCooldown = 0.55;
+
+      const playerPos = cannonToThreeVec3(player.body.position);
+      const forward = new THREE.Vector3(
+        Math.sin(player.visualYaw),
+        0,
+        Math.cos(player.visualYaw)
+      ).normalize();
+
+      let hitSomething = false;
+
+      for (const obj of [...gameObjects]) {
+        if (!obj.body || obj.destroyed || obj.body.mass <= 0) continue;
+
+        const objPos = cannonToThreeVec3(obj.body.position);
+        const toObj = objPos.clone().sub(playerPos);
+        const distance = toObj.length();
+
+        if (distance > 4.2) continue;
+
+        const dir = toObj.clone().normalize();
+        const angleScore = forward.dot(dir);
+
+        if (angleScore > 0.25) {
+          hitSomething = true;
+
+          const impulsePower = 10 + Math.max(0, 4.2 - distance) * 3.5;
+          obj.body.wakeUp();
+          obj.body.applyImpulse(
+            new CANNON.Vec3(
+              forward.x * impulsePower,
+              4.5 + impulsePower * 0.18,
+              forward.z * impulsePower
+            ),
+            obj.body.position
+          );
+
+          if (obj.breakable) {
+            obj.hp -= impulsePower * 3.0;
+            if (obj.hp <= 0) {
+              destroyObject(obj, impulsePower);
+            } else {
+              addScore(20, obj.mesh.position);
+            }
+          }
+        }
+      }
+
+      player.body.applyImpulse(
+        new CANNON.Vec3(forward.x * 1.5, 0.4, forward.z * 1.5),
+        player.body.position
+      );
+
+      if (hitSomething) {
+        showMessage("頭突きヒット！");
+        screenShake(0.18, 0.18);
+      } else {
+        showMessage("スカッ");
+      }
+    }
+
+    function resetPlayer() {
+      player.body.position.set(0, 4, 0);
+      player.body.velocity.set(0, 0, 0);
+      player.body.angularVelocity.set(0, 0, 0);
+      player.body.quaternion.set(0, 0, 0, 1);
+
+      if (state.lickTarget) {
+        releaseLick();
+      }
+
+      showMessage("リセット！");
+    }
+
+    // =========================================================
+    //  ベロアクション
+    // =========================================================
+
+    function toggleLick() {
+      if (!state.started) return;
+
+      if (state.lickTarget) {
+        releaseLick();
+        showMessage("ベロ解除！");
+        return;
+      }
+
+      const target = findLickTarget();
+
+      if (!target) {
+        showMessage("届かない！");
+        return;
+      }
+
+      state.lickTarget = target;
+      target.body.wakeUp();
+      createLickLine();
+
+      addScore(10, target.mesh.position);
+      showMessage(`${target.name}をつかんだ！`);
+    }
+
+    function findLickTarget() {
+      const playerPos = cannonToThreeVec3(player.body.position);
+      const mouthPos = playerPos.clone().add(new THREE.Vector3(0, 0.45, 0));
+
+      const forward = new THREE.Vector3(
+        Math.sin(player.visualYaw),
+        0,
+        Math.cos(player.visualYaw)
+      ).normalize();
+
+      let best = null;
+      let bestScore = -999;
+
+      for (const obj of gameObjects) {
+        if (!obj.body || obj.destroyed || obj.body.mass <= 0) continue;
+        if (obj.name === "debris") continue;
+
+        const objPos = cannonToThreeVec3(obj.body.position);
+        const toObj = objPos.clone().sub(mouthPos);
+        const distance = toObj.length();
+
+        if (distance > 5.5) continue;
+
+        const dir = toObj.clone().normalize();
+        const dot = forward.dot(dir);
+
+        if (dot < 0.22) continue;
+
+        const score = dot * 2 - distance * 0.2;
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = obj;
+        }
+      }
+
+      return best;
+    }
+
+    function createLickLine() {
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -1)
+      ]);
+
+      const mat = new THREE.LineBasicMaterial({
+        color: 0xff5aa5,
+        linewidth: 3
+      });
+
+      state.lickLine = new THREE.Line(geo, mat);
+      scene.add(state.lickLine);
+    }
+
+    function releaseLick() {
+      if (state.lickLine) {
+        scene.remove(state.lickLine);
+        state.lickLine.geometry.dispose();
+        state.lickLine.material.dispose();
+        state.lickLine = null;
+      }
+
+      state.lickTarget = null;
+    }
+
+    function updateLick(delta) {
+      if (!state.lickTarget || state.lickTarget.destroyed) {
+        releaseLick();
+        return;
+      }
+
+      const playerPos = cannonToThreeVec3(player.body.position);
+      const forward = new THREE.Vector3(
+        Math.sin(player.visualYaw),
+        0,
+        Math.cos(player.visualYaw)
+      ).normalize();
+
+      const mouthPos = playerPos.clone()
+        .add(new THREE.Vector3(0, 0.55, 0))
+        .add(forward.clone().multiplyScalar(0.95));
+
+      const holdPos = mouthPos.clone().add(forward.clone().multiplyScalar(2.8));
+
+      const obj = state.lickTarget;
+      const objPos = cannonToThreeVec3(obj.body.position);
+
+      const toHold = holdPos.clone().sub(objPos);
+      const distance = toHold.length();
+
+      if (distance > 10) {
+        releaseLick();
+        showMessage("ベロが外れた！");
+        return;
+      }
+
+      // バネっぽく引っ張る
+      const force = toHold.multiplyScalar(18 * obj.body.mass);
+      obj.body.wakeUp();
+      obj.body.applyForce(
+        new CANNON.Vec3(force.x, force.y + obj.body.mass * 6, force.z),
+        obj.body.position
+      );
+
+      // 近距離で暴れすぎないように少し減衰
+      obj.body.velocity.x *= 0.985;
+      obj.body.velocity.z *= 0.985;
+
+      if (state.lickLine) {
+        const positions = state.lickLine.geometry.attributes.position;
+        positions.setXYZ(0, mouthPos.x, mouthPos.y, mouthPos.z);
+        positions.setXYZ(1, objPos.x, objPos.y, objPos.z);
+        positions.needsUpdate = true;
+      }
+
+      if (distance > 4.5) {
+        addScore(1, obj.mesh.position);
+      }
+    }
+
+    // =========================================================
+    //  カメラ
+    // =========================================================
+
+    const shake = {
+      time: 0,
+      strength: 0
+    };
+
+    function screenShake(time, strength) {
+      shake.time = Math.max(shake.time, time);
+      shake.strength = Math.max(shake.strength, strength);
+    }
+
+    function updateCamera(delta) {
+      const target = cannonToThreeVec3(player.body.position).add(new THREE.Vector3(0, 1.2, 0));
+
+      const distance = state.dashTime > 0 ? 8.5 : 7.2;
+      const height = 3.8 + Math.sin(state.cameraPitch) * 2.2;
+
+      const offset = new THREE.Vector3(
+        -Math.sin(state.cameraYaw) * distance,
+        height,
+        -Math.cos(state.cameraYaw) * distance
+      );
+
+      const desired = target.clone().add(offset);
+
+      if (shake.time > 0) {
+        shake.time -= delta;
+        desired.x += rand(-shake.strength, shake.strength);
+        desired.y += rand(-shake.strength, shake.strength);
+        desired.z += rand(-shake.strength, shake.strength);
+      }
+
+      camera.position.lerp(desired, 1 - Math.pow(0.001, delta));
+      camera.lookAt(target);
+    }
+
+    // =========================================================
+    //  ミッション
+    // =========================================================
+
+    function updateMission() {
+      if (state.missionCompleted) return;
+
+      missionTextEl.textContent = `箱・看板などを10個こわせ！ ${state.destroyedCount}/10`;
+
+      if (state.destroyedCount >= 10) {
+        state.missionCompleted = true;
+        missionTextEl.textContent = "ミッション達成！好きなだけ暴れよう！";
+        addScore(1000, player.mesh.position);
+        showMessage("MISSION CLEAR +1000");
+      }
+    }
+
+    // =========================================================
+    //  同期・掃除
+    // =========================================================
+
+    function syncObjects() {
+      for (const obj of gameObjects) {
+        if (!obj.mesh || !obj.body) continue;
+        syncMeshWithBody(obj.mesh, obj.body);
+
+        // 遠くへ落ちすぎた物は戻す
+        if (obj.body.position.y < -20) {
+          obj.body.position.set(rand(-20, 20), rand(4, 10), rand(-20, 20));
+          obj.body.velocity.set(0, 0, 0);
+          obj.body.angularVelocity.set(0, 0, 0);
+        }
+      }
+    }
+
+    function cleanupTooManyDebris() {
+      const debris = gameObjects.filter((obj) => obj.name === "debris");
+
+      if (debris.length <= 35) return;
+
+      const removeCount = debris.length - 35;
+
+      for (let i = 0; i < removeCount; i++) {
+        const obj = debris[i];
+        if (obj.mesh.parent) scene.remove(obj.mesh);
+        if (obj.body.world) world.removeBody(obj.body);
+
+        const idx = gameObjects.indexOf(obj);
+        if (idx >= 0) gameObjects.splice(idx, 1);
+      }
+    }
+
+    // =========================================================
+    //  初期化
+    // =========================================================
+
+    function init() {
+      createGround();
+      createBoundary();
+      createMapProps();
+      createObjects();
+      setupControls();
+      updateMission();
+
+      camera.position.set(0, 6, -8);
+      camera.lookAt(0, 1, 0);
+
+      window.addEventListener("resize", onResize);
+
+      startButton.addEventListener("pointerdown", () => {
+        startOverlay.style.display = "none";
+        state.started = true;
+        showMessage("ゲーム開始！");
+      });
+
+      animate();
+    }
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // =========================================================
+    //  メインループ
+    // =========================================================
+
+    let fixedTimeStep = 1 / 60;
+    let maxSubSteps = 3;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.05);
+
+      if (state.started) {
+        updatePlayer(delta);
+        updateCombo(delta);
+        updateMessage(delta);
+        updateCamera(delta);
+        cleanupTooManyDebris();
+
+        world.step(fixedTimeStep, delta, maxSubSteps);
+
+        syncObjects();
+
+        // プレイヤーが落ちたら復帰
+        if (player.body.position.y < -20) {
+          resetPlayer();
+        }
+      } else {
+        updateCamera(delta);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    init();
   </script>
 </body>
 </html>
