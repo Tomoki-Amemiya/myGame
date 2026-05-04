@@ -550,11 +550,7 @@
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
-
-    // 元の空の設定
-    // scene.background = new THREE.Color(0x87ceeb);
-    // 下記に変更
-    scene.background = textures.sky;
+    scene.background = new THREE.Color(0x87ceeb);
 
     scene.fog = new THREE.Fog(0x87ceeb, 45, 120);
 
@@ -966,6 +962,9 @@
     textures.cardboard.repeat.set(2, 2);
     textures.board.repeat.set(1, 2);
 
+    // テクスチャ生成後に空背景へ適用する
+    scene.background = textures.sky;
+
     // =========================================================
     //  地面・フィールド
     // =========================================================
@@ -1043,13 +1042,13 @@
         restitution = 0.02
       } = options;
 
+      const useWoodTexture =
+        name.includes("brown") ||
+        name.includes("Stair") ||
+        name === "staticBox";
+
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(size.x, size.y, size.z),
-        const useWoodTexture =
-          name.includes("brown") ||
-          name.includes("Stair") ||
-          name === "staticBox";
-
         new THREE.MeshStandardMaterial({
           map: useWoodTexture ? textures.wood : null,
           color,
