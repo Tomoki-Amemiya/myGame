@@ -1327,12 +1327,15 @@ createStaticBox(
         roughness: 0.75
       });
 
+      const parts = {};
+
       // 胴体
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.0, 0.32), bodyMat);
       body.position.set(0, 0.6, 0);
       body.castShadow = true;
       body.receiveShadow = true;
       group.add(body);
+      parts.body = body;
 
       // 頭
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), skinMat);
@@ -1340,8 +1343,9 @@ createStaticBox(
       head.castShadow = true;
       head.receiveShadow = true;
       group.add(head);
+      parts.head = head;
 
-      // 髪っぽい黒い小球
+      // 髪
       const hair = new THREE.Mesh(new THREE.SphereGeometry(0.285, 16, 8), darkMat);
       hair.position.set(0, 1.38, 0);
       hair.scale.set(1, 0.45, 1);
@@ -1353,14 +1357,16 @@ createStaticBox(
 
       const leftArm = new THREE.Mesh(armGeo, skinMat);
       leftArm.position.set(-0.43, 0.62, 0);
-      leftArm.rotation.z = 0.18;
       leftArm.castShadow = true;
       group.add(leftArm);
 
-      const rightArm = leftArm.clone();
-      rightArm.position.x = 0.43;
-      rightArm.rotation.z = -0.18;
+      const rightArm = new THREE.Mesh(armGeo, skinMat);
+      rightArm.position.set(0.43, 0.62, 0);
+      rightArm.castShadow = true;
       group.add(rightArm);
+
+      parts.leftArm = leftArm;
+      parts.rightArm = rightArm;
 
       // 足
       const legGeo = new THREE.BoxGeometry(0.18, 0.72, 0.2);
@@ -1370,15 +1376,21 @@ createStaticBox(
       leftLeg.castShadow = true;
       group.add(leftLeg);
 
-      const rightLeg = leftLeg.clone();
-      rightLeg.position.x = 0.16;
+      const rightLeg = new THREE.Mesh(legGeo, darkMat);
+      rightLeg.position.set(0.16, -0.15, 0);
+      rightLeg.castShadow = true;
       group.add(rightLeg);
 
-      // 進行方向が分かるように鼻っぽい小さい突起
+      parts.leftLeg = leftLeg;
+      parts.rightLeg = rightLeg;
+
+      // 鼻
       const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.12), skinMat);
       nose.position.set(0, 1.28, -0.27);
       nose.castShadow = true;
       group.add(nose);
+
+      group.userData.parts = parts;
 
       return group;
     }
@@ -1396,12 +1408,15 @@ createStaticBox(
         roughness: 0.8
       });
 
+      const parts = {};
+
       // 胴体
       const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.55, 0.55), bodyMat);
       body.position.set(0, 0.38, 0);
       body.castShadow = true;
       body.receiveShadow = true;
       group.add(body);
+      parts.body = body;
 
       // 頭
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.42, 0.5), bodyMat);
@@ -1409,6 +1424,7 @@ createStaticBox(
       head.castShadow = true;
       head.receiveShadow = true;
       group.add(head);
+      parts.head = head;
 
       // 鼻
       const snout = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.26), darkMat);
@@ -1425,26 +1441,42 @@ createStaticBox(
       leftEar.castShadow = true;
       group.add(leftEar);
 
-      const rightEar = leftEar.clone();
-      rightEar.position.x = 0.22;
+      const rightEar = new THREE.Mesh(earGeo, darkMat);
+      rightEar.position.set(0.22, 0.82, -0.62);
       rightEar.rotation.z = -0.25;
+      rightEar.castShadow = true;
       group.add(rightEar);
+
+      parts.leftEar = leftEar;
+      parts.rightEar = rightEar;
 
       // 足
       const legGeo = new THREE.BoxGeometry(0.14, 0.45, 0.14);
-      const legPositions = [
-        [-0.38, 0.05, -0.25],
-        [0.38, 0.05, -0.25],
-        [-0.38, 0.05, 0.25],
-        [0.38, 0.05, 0.25]
-      ];
 
-      for (const p of legPositions) {
-        const leg = new THREE.Mesh(legGeo, darkMat);
-        leg.position.set(p[0], p[1], p[2]);
-        leg.castShadow = true;
-        group.add(leg);
-      }
+      const frontLeftLeg = new THREE.Mesh(legGeo, darkMat);
+      frontLeftLeg.position.set(-0.38, 0.05, -0.25);
+      frontLeftLeg.castShadow = true;
+      group.add(frontLeftLeg);
+
+      const frontRightLeg = new THREE.Mesh(legGeo, darkMat);
+      frontRightLeg.position.set(0.38, 0.05, -0.25);
+      frontRightLeg.castShadow = true;
+      group.add(frontRightLeg);
+
+      const backLeftLeg = new THREE.Mesh(legGeo, darkMat);
+      backLeftLeg.position.set(-0.38, 0.05, 0.25);
+      backLeftLeg.castShadow = true;
+      group.add(backLeftLeg);
+
+      const backRightLeg = new THREE.Mesh(legGeo, darkMat);
+      backRightLeg.position.set(0.38, 0.05, 0.25);
+      backRightLeg.castShadow = true;
+      group.add(backRightLeg);
+
+      parts.frontLeftLeg = frontLeftLeg;
+      parts.frontRightLeg = frontRightLeg;
+      parts.backLeftLeg = backLeftLeg;
+      parts.backRightLeg = backRightLeg;
 
       // しっぽ
       const tail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.55), bodyMat);
@@ -1452,6 +1484,9 @@ createStaticBox(
       tail.rotation.x = -0.55;
       tail.castShadow = true;
       group.add(tail);
+      parts.tail = tail;
+
+      group.userData.parts = parts;
 
       return group;
     }
@@ -1464,7 +1499,7 @@ createStaticBox(
         color,
         radius = 0.55,
         height = 1.6,
-        speed = 1.2,
+        speed = 2.2,
         wanderRadius = 12
       } = options;
 
@@ -1472,22 +1507,27 @@ createStaticBox(
         ? createDogMesh(color)
         : createHumanMesh(color);
 
-      mesh.position.copy(position);
+      // NPCは最初から地面に接地した高さで生成する
+      // CANNON.Sphere の中心Yは radius 付近が地面接地位置
+      const spawnY = radius + 0.04;
+      const spawnPosition = new THREE.Vector3(position.x, spawnY, position.z);
+
+      mesh.position.copy(spawnPosition);
       enableShadowForObject3D(mesh);
       scene.add(mesh);
 
       // ベロでつかめるようにDynamic Bodyにする。
       // 破壊不能なのでbreakableはfalse。
       const body = new CANNON.Body({
-        mass: type === "dog" ? 1.5 : 2.8,
+        mass: type === "dog" ? 1.4 : 2.4,
         material: defaultMaterial,
-        linearDamping: 0.35,
+        linearDamping: 0.12,
         angularDamping: 0.75,
         fixedRotation: true,
         shape: new CANNON.Sphere(radius)
       });
 
-      body.position.set(position.x, position.y, position.z);
+      body.position.set(spawnPosition.x, spawnPosition.y, spawnPosition.z);
       body.allowSleep = false;
       world.addBody(body);
       body.wakeUp();
@@ -1506,19 +1546,21 @@ createStaticBox(
         destroyed: false,
         isNPC: true,
         npcType: type,
-        home: position.clone(),
-        target: position.clone(),
+
+        // home/targetはX/Zだけ使う
+        home: new THREE.Vector3(position.x, 0, position.z),
+        target: new THREE.Vector3(position.x, 0, position.z),
+
         speed,
         wanderRadius,
         waitTimer: rand(0.1, 0.6),
         walkAnimTime: rand(0, 10),
         visualYaw: 0,
-
-        // 頭突きなどで吹き飛ばされた直後は、自律移動で速度を上書きしない
         stunTimer: 0,
+        retargetTimer: rand(2.0, 4.0),
 
-        // 次の目的地を選ぶまでの保険タイマー
-        retargetTimer: rand(2.0, 4.0)
+        // 犬はメッシュの足が少し浮きやすいため、見た目だけ少し下げる
+        visualYOffset: type === "dog" ? -0.22 : 0
       };
 
       body.userData = npc;
@@ -1554,50 +1596,50 @@ createStaticBox(
       createNPC({
         type: "human",
         name: "人",
-        position: new THREE.Vector3(-10, 2.2, -8),
+        position: new THREE.Vector3(-10, 0, -8),
         color: 0x4f8cff,
-        speed: 1.05,
-        wanderRadius: 10
-      });
-
-      createNPC({
-        type: "human",
-        name: "人",
-        position: new THREE.Vector3(18, 2.2, 20),
-        color: 0xff7a7a,
-        speed: 0.95,
-        wanderRadius: 11
-      });
-
-      createNPC({
-        type: "human",
-        name: "人",
-        position: new THREE.Vector3(-30, 2.2, 16),
-        color: 0x8be06a,
-        speed: 1.15,
-        wanderRadius: 9
-      });
-
-      createNPC({
-        type: "dog",
-        name: "犬",
-        position: new THREE.Vector3(10, 1.2, -30),
-        color: 0xb07a45,
-        radius: 0.45,
-        height: 0.9,
-        speed: 1.45,
+        speed: 2.1,
         wanderRadius: 12
       });
 
       createNPC({
+        type: "human",
+        name: "人",
+        position: new THREE.Vector3(18, 0, 20),
+        color: 0xff7a7a,
+        speed: 2.0,
+        wanderRadius: 12
+      });
+
+      createNPC({
+        type: "human",
+        name: "人",
+        position: new THREE.Vector3(-30, 0, 16),
+        color: 0x8be06a,
+        speed: 2.2,
+        wanderRadius: 11
+      });
+
+      createNPC({
         type: "dog",
         name: "犬",
-        position: new THREE.Vector3(-24, 1.2, 30),
+        position: new THREE.Vector3(10, 0, -30),
+        color: 0xb07a45,
+        radius: 0.45,
+        height: 0.9,
+        speed: 2.7,
+        wanderRadius: 13
+      });
+
+      createNPC({
+        type: "dog",
+        name: "犬",
+        position: new THREE.Vector3(-24, 0, 30),
         color: 0xd6b17a,
         radius: 0.45,
         height: 0.9,
-        speed: 1.35,
-        wanderRadius: 10
+        speed: 2.55,
+        wanderRadius: 12
       });
     }
 
@@ -2142,8 +2184,8 @@ createStaticBox(
 
         move.normalize();
 
-        // 通常移動が遅めだったため少し速くする(元の値：0 ? 12.5 : 7.0;)
-        const speed = state.dashTime > 0 ? 14.5 : 9.2;
+        // 通常の移動速度が遅めだったため少し速くする(元の値：0 ? 12.5 : 7.0;)
+        const speed = state.dashTime > 0 ? 16.5 : 11.2;
 
         player.body.velocity.x = move.x * speed;
         player.body.velocity.z = move.z * speed;
@@ -2784,7 +2826,7 @@ createStaticBox(
 
         // ベロで掴まれている間は自力移動しない
         if (state.lickTarget === npc) {
-          npc.walkAnimTime += delta * 4;
+          npc.walkAnimTime += delta * 5;
           npc.stunTimer = Math.max(npc.stunTimer, 0.25);
           continue;
         }
@@ -2792,15 +2834,14 @@ createStaticBox(
         // 頭突きなどで吹き飛ばされた直後は、しばらく自律移動しない
         if (npc.stunTimer > 0) {
           npc.stunTimer = Math.max(0, npc.stunTimer - delta);
-          npc.walkAnimTime += delta * 6;
+          npc.walkAnimTime += delta * 8;
           continue;
         }
 
-        const pos = cannonToThreeVec3(npc.body.position);
-
         // 落下しすぎた場合はホーム付近へ戻す
         if (npc.body.position.y < -10) {
-          npc.body.position.set(npc.home.x, 3, npc.home.z);
+          const resetY = npc.npcType === "dog" ? 0.49 : 0.59;
+          npc.body.position.set(npc.home.x, resetY, npc.home.z);
           npc.body.velocity.set(0, 0, 0);
           npc.body.angularVelocity.set(0, 0, 0);
           chooseNewNPCTarget(npc);
@@ -2809,6 +2850,8 @@ createStaticBox(
         }
 
         npc.retargetTimer -= delta;
+
+        const pos = cannonToThreeVec3(npc.body.position);
 
         const toTarget = new THREE.Vector3(
           npc.target.x - pos.x,
@@ -2819,15 +2862,15 @@ createStaticBox(
         const distance = toTarget.length();
 
         // 目的地に近い、または一定時間経ったら次の目的地へ
-        if (distance < 1.2 || npc.retargetTimer <= 0) {
+        if (distance < 1.0 || npc.retargetTimer <= 0) {
           npc.waitTimer -= delta;
 
-          npc.body.velocity.x *= 0.82;
-          npc.body.velocity.z *= 0.82;
+          npc.body.velocity.x *= 0.75;
+          npc.body.velocity.z *= 0.75;
 
           if (npc.waitTimer <= 0 || npc.retargetTimer <= 0) {
             chooseNewNPCTarget(npc);
-            npc.retargetTimer = rand(2.0, 4.5);
+            npc.retargetTimer = rand(2.5, 5.0);
           }
 
           continue;
@@ -2836,24 +2879,19 @@ createStaticBox(
         const dir = toTarget.normalize();
 
         const npcSpeed = npc.npcType === "dog"
-          ? npc.speed * 1.15
+          ? npc.speed
           : npc.speed;
 
-        // ゆっくり歩き回る。
-        // 速度を直接入れることで、確実に移動させる。
+        // 地上を歩くNPCなので、X/Z速度を毎フレーム確実に設定する
         npc.body.velocity.x = dir.x * npcSpeed;
         npc.body.velocity.z = dir.z * npcSpeed;
 
-        // 接地中のNPCが微妙な段差で止まらないように、少しだけ上方向補助
-        if (npc.body.position.y < 1.1) {
-          npc.body.velocity.y = Math.max(npc.body.velocity.y, 0.15);
-        }
+        // 前回の上方向補助は、浮きや接地不安定の原因になりやすいので入れない
+        // ただし落下しすぎないように下方向だけ制限する
+        npc.body.velocity.y = Math.max(npc.body.velocity.y, -7);
 
         npc.visualYaw = Math.atan2(dir.x, dir.z);
-        npc.walkAnimTime += delta * (npc.npcType === "dog" ? 9 : 6);
-
-        // 落下速度の上限
-        npc.body.velocity.y = Math.max(npc.body.velocity.y, -8);
+        npc.walkAnimTime += delta * (npc.npcType === "dog" ? 11 : 8);
       }
     }
 
@@ -2863,31 +2901,93 @@ createStaticBox(
 
         syncMeshWithBody(npc.mesh, npc.body);
 
+        // 見た目だけの接地補正
+        npc.mesh.position.y += npc.visualYOffset || 0;
+
         // 進行方向へ向ける
         npc.mesh.rotation.set(0, npc.visualYaw + Math.PI, 0);
 
-        // 歩いている感じの上下揺れ・左右揺れ
         const speedXZ = Math.hypot(npc.body.velocity.x, npc.body.velocity.z);
-        const walking = speedXZ > 0.2 && state.lickTarget !== npc;
+        const walking =
+          speedXZ > 0.25 &&
+          state.lickTarget !== npc &&
+          npc.stunTimer <= 0;
+
+        const parts = npc.mesh.userData.parts || {};
 
         if (walking) {
-          const bounce = Math.sin(npc.walkAnimTime) * 0.04;
-          const sway = Math.sin(npc.walkAnimTime * 0.5) * 0.06;
+          const t = npc.walkAnimTime;
 
-          npc.mesh.position.y += Math.abs(bounce);
-          npc.mesh.rotation.z = sway;
+          // 全体の軽い上下揺れ
+          const bounce = Math.abs(Math.sin(t)) * 0.045;
+          npc.mesh.position.y += bounce;
+
+          // 少し左右に揺れて歩いている感じを出す
+          npc.mesh.rotation.z = Math.sin(t * 0.5) * 0.045;
+
+          if (npc.npcType === "human") {
+            // 人型：腕と足を前後に振る
+            const swing = Math.sin(t) * 0.55;
+
+            if (parts.leftArm) parts.leftArm.rotation.x = swing;
+            if (parts.rightArm) parts.rightArm.rotation.x = -swing;
+
+            if (parts.leftLeg) parts.leftLeg.rotation.x = -swing * 0.85;
+            if (parts.rightLeg) parts.rightLeg.rotation.x = swing * 0.85;
+
+            if (parts.head) {
+              parts.head.position.y = 1.28 + Math.abs(Math.sin(t)) * 0.025;
+            }
+
+            npc.mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.2);
+          }
+
+          if (npc.npcType === "dog") {
+            // 犬型：前足と後ろ足を交互に振る
+            const swing = Math.sin(t) * 0.45;
+            const opposite = -swing;
+
+            if (parts.frontLeftLeg) parts.frontLeftLeg.rotation.x = swing;
+            if (parts.backRightLeg) parts.backRightLeg.rotation.x = swing;
+
+            if (parts.frontRightLeg) parts.frontRightLeg.rotation.x = opposite;
+            if (parts.backLeftLeg) parts.backLeftLeg.rotation.x = opposite;
+
+            if (parts.tail) {
+              parts.tail.rotation.y = Math.sin(t * 1.6) * 0.45;
+              parts.tail.rotation.x = -0.55 + Math.cos(t * 1.6) * 0.12;
+            }
+
+            if (parts.head) {
+              parts.head.position.y = 0.55 + Math.abs(Math.sin(t)) * 0.025;
+            }
+
+            npc.mesh.scale.set(
+              1.0 + Math.sin(t) * 0.025,
+              1.0,
+              1.0 + Math.cos(t) * 0.025
+            );
+          }
         } else {
+          // 停止時はパーツを自然に戻す
           npc.mesh.rotation.z *= 0.85;
-        }
 
-        if (npc.npcType === "dog" && walking) {
-          npc.mesh.scale.set(
-            1.0 + Math.sin(npc.walkAnimTime) * 0.03,
-            1.0,
-            1.0 + Math.cos(npc.walkAnimTime) * 0.03
-          );
-        } else {
-          npc.mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.12);
+          if (parts.leftArm) parts.leftArm.rotation.x *= 0.8;
+          if (parts.rightArm) parts.rightArm.rotation.x *= 0.8;
+          if (parts.leftLeg) parts.leftLeg.rotation.x *= 0.8;
+          if (parts.rightLeg) parts.rightLeg.rotation.x *= 0.8;
+
+          if (parts.frontLeftLeg) parts.frontLeftLeg.rotation.x *= 0.8;
+          if (parts.frontRightLeg) parts.frontRightLeg.rotation.x *= 0.8;
+          if (parts.backLeftLeg) parts.backLeftLeg.rotation.x *= 0.8;
+          if (parts.backRightLeg) parts.backRightLeg.rotation.x *= 0.8;
+
+          if (parts.tail) {
+            parts.tail.rotation.y *= 0.8;
+            parts.tail.rotation.x += (-0.55 - parts.tail.rotation.x) * 0.2;
+          }
+
+          npc.mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.15);
         }
       }
     }
