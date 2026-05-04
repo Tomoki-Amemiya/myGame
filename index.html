@@ -627,7 +627,7 @@
       dashTime: 0,
       dashCooldown: 0,
       cameraYaw: 0,
-      cameraPitch: 0.28,
+      cameraPitch: 0.08,
       isGrounded: false,
       lickTarget: null,
       lickLine: null,
@@ -2510,6 +2510,16 @@ createStaticBox(
     const btnDash = document.getElementById("btnDash");
     const btnReset = document.getElementById("btnReset");
 
+    function updateHeadbuttButtonLabel() {
+      if (!btnHeadbutt) return;
+
+      if (state.lickTarget && state.lickTarget.isLegendarySword) {
+        btnHeadbutt.innerHTML = "頭突き<br>威力UP";
+      } else {
+        btnHeadbutt.textContent = "頭突き";
+      }
+    }
+
     function setupControls() {
       window.addEventListener("keydown", (event) => {
         switch (event.code) {
@@ -2982,7 +2992,7 @@ createStaticBox(
 
       // 伝説の剣をベロで保持している間だけ、頭突きの吹き飛ばし力を大幅強化
       const hasLegendarySwordPower = !!(state.lickTarget && state.lickTarget.isLegendarySword);
-      const legendaryPowerMultiplier = hasLegendarySwordPower ? 20 : 1;
+      const legendaryPowerMultiplier = hasLegendarySwordPower ? 5 : 1;
 
       let hitSomething = false;
 
@@ -3010,7 +3020,7 @@ createStaticBox(
         if (obj.isNPC) {
           // NPCは破壊不能。ただし、頭突きでは派手に吹き飛ばす。
           const npcImpulsePower = impulsePower * (obj.npcType === "dog" ? 3.4 : 3.0) * legendaryPowerMultiplier;
-          const upwardPower = (obj.npcType === "dog" ? 11.5 : 12.5) * (hasLegendarySwordPower ? 2.4 : 1);
+          const upwardPower = (obj.npcType === "dog" ? 11.5 : 12.5) * (hasLegendarySwordPower ? 1.35 : 1);
 
           obj.stunTimer = 2.0;
           obj.isWalking = false;
@@ -3037,7 +3047,7 @@ createStaticBox(
           obj.body.applyImpulse(
             new CANNON.Vec3(
               forward.x * effectiveImpulsePower,
-              (4.5 + impulsePower * 0.18) * (hasLegendarySwordPower ? 2.2 : 1),
+              (4.5 + impulsePower * 0.18) * (hasLegendarySwordPower ? 1.35 : 1),
               forward.z * effectiveImpulsePower
             ),
             obj.body.position
@@ -3133,6 +3143,7 @@ createStaticBox(
 
       if (state.lickTarget) {
         releaseLick();
+        updateHeadbuttButtonLabel();
         showMessage("ベロ解除！");
         return;
       }
@@ -3155,6 +3166,7 @@ createStaticBox(
       target.body.wakeUp();
 
       createLickLine();
+      updateHeadbuttButtonLabel();
 
       if (target.isLegendarySword) {
         pullLegendarySwordFromStone(target);
@@ -3162,9 +3174,10 @@ createStaticBox(
         if (!state.hasLegendarySword) {
           state.hasLegendarySword = true;
           updateMission();
+          showMessage("伝説の剣を装備中は頭突きの威力アップ！");
+        } else {
+          showMessage("伝説の剣をベロで掴んだ！");
         }
-
-        showMessage("伝説の剣をベロで掴んだ！");
         return;
       }
 
@@ -3283,6 +3296,7 @@ createStaticBox(
       }
 
       state.lickTarget = null;
+      updateHeadbuttButtonLabel();
     }
 
     function updateLick(delta) {
@@ -3420,68 +3434,76 @@ createStaticBox(
         check: () => state.destroyedCount >= 10
       },
       {
-        id: "score1000",
-        title: "スコア1000点",
-        desc: "スコアを1000点以上にする",
-        reward: 100,
-        progressText: () => `${state.score}/1000`,
-        check: () => state.score >= 1000
-      },
-      {
-        id: "score3000",
-        title: "スコア3000点",
-        desc: "スコアを3000点以上にする",
+        id: "score5000",
+        title: "破壊の新人",
+        desc: "スコアを5000点以上にする",
         reward: 200,
-        progressText: () => `${state.score}/3000`,
-        check: () => state.score >= 3000
-      },
-      {
-        id: "score6000",
-        title: "スコア6000点",
-        desc: "スコアを6000点以上にする",
-        reward: 200,
-        progressText: () => `${state.score}/6000`,
-        check: () => state.score >= 6000
-      },
-      {
-        id: "destroyCars",
-        title: "車クラッシャー",
-        desc: "車っぽい物体を2台破壊する",
-        reward: 100,
-        progressText: () => `${state.destroyedByName["車っぽい物体"] || 0}/2`,
-        check: () => (state.destroyedByName["車っぽい物体"] || 0) >= 2
+        progressText: () => `${state.score}/5000`,
+        check: () => state.score >= 5000
       },
       {
         id: "destroyBoards",
         title: "板クラッシャー",
         desc: "黄色い板を5枚破壊する",
-        reward: 100,
+        reward: 300,
         progressText: () => `${state.destroyedByName["板"] || 0}/5`,
         check: () => (state.destroyedByName["板"] || 0) >= 5
+      },
+      {
+        id: "score10000",
+        title: "破壊の中級者",
+        desc: "スコアを10000点以上にする",
+        reward: 200,
+        progressText: () => `${state.score}/10000`,
+        check: () => state.score >= 10000
+      },
+      {
+        id: "destroyCars",
+        title: "車クラッシャー",
+        desc: "車っぽい物体を2台破壊する",
+        reward: 500,
+        progressText: () => `${state.destroyedByName["車っぽい物体"] || 0}/2`,
+        check: () => (state.destroyedByName["車っぽい物体"] || 0) >= 2
+      },
+      {
+        id: "score15000",
+        title: "破壊マスター",
+        desc: "スコアを15000点以上にする",
+        reward: 1000,
+        progressText: () => `${state.score}/15000`,
+        check: () => state.score >= 15000
       },
       {
         id: "destroyBomb",
         title: "赤箱注意",
         desc: "あやしい赤箱を1個破壊する",
-        reward: 300,
+        reward: 100,
         progressText: () => `${state.destroyedByName["あやしい赤箱"] || 0}/1`,
         check: () => (state.destroyedByName["あやしい赤箱"] || 0) >= 1
       },
       {
+        id: "score30000",
+        title: "破壊の化身",
+        desc: "スコアを30000点以上にする",
+        reward: 3000,
+        progressText: () => `${state.score}/30000`,
+        check: () => state.score >= 30000
+      },
+      {
         id: "getLegendarySword",
         title: "伝説の剣",
-        desc: "大きな高台の上にある伝説の剣をベロで手に入れる",
+        desc: "伝説の剣を手に入れる",
         reward: 500,
         progressText: () => state.hasLegendarySword ? "1/1" : "0/1",
         check: () => state.hasLegendarySword
       },
       {
-        id: "score10000",
-        title: "スコア10000点",
-        desc: "スコアを10000点以上にする",
-        reward: 200,
-        progressText: () => `${state.score}/10000`,
-        check: () => state.score >= 10000
+        id: "score50000",
+        title: "破壊神",
+        desc: "スコアを50000点以上にする",
+        reward: 5000,
+        progressText: () => `${state.score}/50000`,
+        check: () => state.score >= 50000
       }
     ];
 
