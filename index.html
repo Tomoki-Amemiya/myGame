@@ -1481,7 +1481,7 @@ createStaticBox(
       const body = new CANNON.Body({
         mass: type === "dog" ? 1.5 : 2.8,
         material: defaultMaterial,
-        linearDamping: 0.45,
+        linearDamping: 0.35,
         angularDamping: 0.75,
         fixedRotation: true,
         shape: new CANNON.Sphere(radius)
@@ -1490,6 +1490,7 @@ createStaticBox(
       body.position.set(position.x, position.y, position.z);
       body.allowSleep = false;
       world.addBody(body);
+      body.wakeUp();
 
       const npc = {
         mesh,
@@ -1509,9 +1510,15 @@ createStaticBox(
         target: position.clone(),
         speed,
         wanderRadius,
-        waitTimer: rand(0.3, 1.5),
+        waitTimer: rand(0.1, 0.6),
         walkAnimTime: rand(0, 10),
-        visualYaw: 0
+        visualYaw: 0,
+
+        // 頭突きなどで吹き飛ばされた直後は、自律移動で速度を上書きしない
+        stunTimer: 0,
+
+        // 次の目的地を選ぶまでの保険タイマー
+        retargetTimer: rand(2.0, 4.0)
       };
 
       body.userData = npc;
@@ -2289,6 +2296,30 @@ createStaticBox(
 
           const impulsePower = 10 + Math.max(0, 4.2 - distance) * 3.5;
           obj.body.wakeUp();
+
+          // NPCは破壊不能のまま、頭突きで気持ちよく吹き飛ぶようにする
+          if (obj.isNPC) {
+            const npcImpulsePower = impulsePower * (obj.npcType === "dog" ? 1.7 : 1.45);
+            const upwardPower = obj.npcType === "dog" ? 6.8 : 7.8;
+
+            obj.stunTimer = 1.25;
+
+            obj.body.velocity.x *= 0.35;
+            obj.body.velocity.z *= 0.35;
+
+            obj.body.applyImpulse(
+              new CANNON.Vec3(
+                forward.x * npcImpulsePower,
+                upwardPower,
+                forward.z * npcImpulsePower
+              ),
+              obj.body.position
+            );
+
+            addScore(15, obj.mesh.position);
+            continue;
+          }
+
           obj.body.applyImpulse(
             new CANNON.Vec3(
               forward.x * impulsePower,
@@ -2749,9 +2780,19 @@ createStaticBox(
       for (const npc of npcs) {
         if (!npc.body || npc.destroyed) continue;
 
+        npc.body.wakeUp();
+
         // ベロで掴まれている間は自力移動しない
         if (state.lickTarget === npc) {
           npc.walkAnimTime += delta * 4;
+          npc.stunTimer = Math.max(npc.stunTimer, 0.25);
+          continue;
+        }
+
+        // 頭突きなどで吹き飛ばされた直後は、しばらく自律移動しない
+        if (npc.stunTimer > 0) {
+          npc.stunTimer = Math.max(0, npc.stunTimer - delta);
+          npc.walkAnimTime += delta * 6;
           continue;
         }
 
@@ -2763,8 +2804,11 @@ createStaticBox(
           npc.body.velocity.set(0, 0, 0);
           npc.body.angularVelocity.set(0, 0, 0);
           chooseNewNPCTarget(npc);
+          npc.retargetTimer = rand(2.0, 4.0);
           continue;
         }
+
+        npc.retargetTimer -= delta;
 
         const toTarget = new THREE.Vector3(
           npc.target.x - pos.x,
@@ -2774,29 +2818,41 @@ createStaticBox(
 
         const distance = toTarget.length();
 
-        if (distance < 1.2) {
+        // 目的地に近い、または一定時間経ったら次の目的地へ
+        if (distance < 1.2 || npc.retargetTimer <= 0) {
           npc.waitTimer -= delta;
 
-          npc.body.velocity.x *= 0.86;
-          npc.body.velocity.z *= 0.86;
+          npc.body.velocity.x *= 0.82;
+          npc.body.velocity.z *= 0.82;
 
-          if (npc.waitTimer <= 0) {
+          if (npc.waitTimer <= 0 || npc.retargetTimer <= 0) {
             chooseNewNPCTarget(npc);
+            npc.retargetTimer = rand(2.0, 4.5);
           }
-        } else {
-          const dir = toTarget.normalize();
 
-          npc.body.wakeUp();
-
-          // ゆっくり歩く。外力で押されたときも、急に戻りすぎないように速度だけ調整
-          npc.body.velocity.x = dir.x * npc.speed;
-          npc.body.velocity.z = dir.z * npc.speed;
-
-          npc.visualYaw = Math.atan2(dir.x, dir.z);
-          npc.walkAnimTime += delta * (npc.npcType === "dog" ? 8 : 5);
+          continue;
         }
 
-        // 高台や階段に押し込まれたときに暴れすぎないようにする
+        const dir = toTarget.normalize();
+
+        const npcSpeed = npc.npcType === "dog"
+          ? npc.speed * 1.15
+          : npc.speed;
+
+        // ゆっくり歩き回る。
+        // 速度を直接入れることで、確実に移動させる。
+        npc.body.velocity.x = dir.x * npcSpeed;
+        npc.body.velocity.z = dir.z * npcSpeed;
+
+        // 接地中のNPCが微妙な段差で止まらないように、少しだけ上方向補助
+        if (npc.body.position.y < 1.1) {
+          npc.body.velocity.y = Math.max(npc.body.velocity.y, 0.15);
+        }
+
+        npc.visualYaw = Math.atan2(dir.x, dir.z);
+        npc.walkAnimTime += delta * (npc.npcType === "dog" ? 9 : 6);
+
+        // 落下速度の上限
         npc.body.velocity.y = Math.max(npc.body.velocity.y, -8);
       }
     }
