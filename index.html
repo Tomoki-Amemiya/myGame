@@ -86,6 +86,113 @@
       margin-bottom: 2px;
     }
 
+    #missionPanel {
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    #missionText {
+      font-size: 13px;
+    }
+
+    #missionHint {
+      margin-top: 4px;
+      font-size: 11px;
+      opacity: 0.85;
+    }
+
+    #missionOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.55);
+      color: white;
+      padding: 18px;
+    }
+
+    #missionOverlay.hidden {
+      display: none;
+    }
+
+    #missionCard {
+      width: min(92vw, 620px);
+      max-height: 82vh;
+      overflow: auto;
+      background: rgba(20, 24, 30, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 22px;
+      padding: 18px;
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+    }
+
+    #missionCardHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    #missionCardHeader h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    #missionCloseButton {
+      border: none;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-weight: 900;
+      background: white;
+      color: #222;
+    }
+
+    #missionList {
+      display: grid;
+      gap: 10px;
+    }
+
+    .missionItem {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .missionItem.completed {
+      background: rgba(80, 220, 120, 0.18);
+      border-color: rgba(120, 255, 160, 0.45);
+    }
+
+    .missionMark {
+      font-size: 22px;
+      line-height: 1.2;
+      text-align: center;
+    }
+
+    .missionName {
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+
+    .missionDesc {
+      font-size: 13px;
+      opacity: 0.9;
+      line-height: 1.45;
+    }
+
+    .missionProgress {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #ffe66d;
+    }
+
     #helpPanel {
       font-size: 12px;
       line-height: 1.45;
@@ -324,7 +431,8 @@
 
       <div id="missionPanel">
         <div id="missionTitle">MISSION</div>
-        <div id="missionText">箱を10個こわせ！</div>
+        <div id="missionText">ミッション確認中...</div>
+        <div id="missionHint">タップで一覧</div>
       </div>
 
       <div id="helpPanel">
@@ -367,6 +475,16 @@
     </div>
   </div>
 
+  <div id="missionOverlay" class="hidden">
+    <div id="missionCard">
+      <div id="missionCardHeader">
+        <h2>MISSION一覧</h2>
+        <button id="missionCloseButton">閉じる</button>
+      </div>
+      <div id="missionList"></div>
+    </div>
+  </div>
+
   <script type="module">
     import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
     import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js";
@@ -379,6 +497,10 @@
     const scoreEl = document.getElementById("score");
     const comboEl = document.getElementById("combo");
     const missionTextEl = document.getElementById("missionText");
+    const missionPanelEl = document.getElementById("missionPanel");
+    const missionOverlayEl = document.getElementById("missionOverlay");
+    const missionListEl = document.getElementById("missionList");
+    const missionCloseButtonEl = document.getElementById("missionCloseButton");
     const messageEl = document.getElementById("message");
     const startOverlay = document.getElementById("startOverlay");
     const startButton = document.getElementById("startButton");
@@ -453,6 +575,7 @@
       comboMultiplier: 1,
       comboTimer: 0,
       destroyedCount: 0,
+      destroyedByName: {},
       headbuttCooldown: 0,
       jumpCooldown: 0,
       dashTime: 0,
@@ -513,7 +636,7 @@
       }
     }
 
-    function addScore(points, worldPosition) {
+    function addScore(points, worldPosition, options = {}) {
       const gained = Math.round(points * state.comboMultiplier);
       state.score += gained;
       state.comboCount += 1;
@@ -534,6 +657,10 @@
 
       if (worldPosition) {
         spawnFloatingScore(gained, worldPosition);
+      }
+
+      if (!options.skipMissionUpdate && state.started) {
+        updateMission();
       }
     }
 
@@ -711,9 +838,36 @@
       createStaticBox(new THREE.Vector3(22, 1, 8), new THREE.Vector3(7, 2, 7), 0x9a9a9a);
       createStaticBox(new THREE.Vector3(28, 2, 8), new THREE.Vector3(5, 4, 5), 0x888888);
 
+      // 小さな台へ登るための段差
+      createStaticBox(new THREE.Vector3(14, 0.35, 8), new THREE.Vector3(4, 0.7, 4), 0xaaaaaa);
+      createStaticBox(new THREE.Vector3(17.5, 0.75, 8), new THREE.Vector3(4, 1.5, 4), 0x9f9f9f);
+
       // 建物風ブロック
       createStaticBox(new THREE.Vector3(-36, 4, -24), new THREE.Vector3(12, 8, 12), 0xb7b7b7);
       createStaticBox(new THREE.Vector3(36, 5, 28), new THREE.Vector3(14, 10, 14), 0xc1a078);
+
+      // 高い建物へ登るための段差：左奥ブロック用
+      createStaticBox(new THREE.Vector3(-18, 0.4, -24), new THREE.Vector3(5, 0.8, 5), 0xc9c9c9);
+      createStaticBox(new THREE.Vector3(-22, 1.25, -24), new THREE.Vector3(5, 1.0, 5), 0xbfbfbf);
+      createStaticBox(new THREE.Vector3(-26, 2.1, -24), new THREE.Vector3(5, 1.0, 5), 0xb5b5b5);
+      createStaticBox(new THREE.Vector3(-30, 3.0, -24), new THREE.Vector3(5, 1.0, 5), 0xababab);
+      createStaticBox(new THREE.Vector3(-34, 3.9, -24), new THREE.Vector3(5, 1.0, 5), 0xa1a1a1);
+      createStaticBox(new THREE.Vector3(-38, 4.8, -24), new THREE.Vector3(5, 1.0, 5), 0x979797);
+      createStaticBox(new THREE.Vector3(-41, 5.8, -24), new THREE.Vector3(4, 1.0, 5), 0x8d8d8d);
+      createStaticBox(new THREE.Vector3(-41, 6.8, -24), new THREE.Vector3(4, 1.0, 5), 0x838383);
+      createStaticBox(new THREE.Vector3(-39, 7.6, -24), new THREE.Vector3(5, 0.8, 5), 0x797979);
+
+      // 高い建物へ登るための段差：右奥ブロック用
+      createStaticBox(new THREE.Vector3(36, 0.4, 8), new THREE.Vector3(5, 0.8, 5), 0xd2b58f);
+      createStaticBox(new THREE.Vector3(36, 1.3, 12), new THREE.Vector3(5, 1.0, 5), 0xcbaa84);
+      createStaticBox(new THREE.Vector3(36, 2.2, 16), new THREE.Vector3(5, 1.0, 5), 0xc19f79);
+      createStaticBox(new THREE.Vector3(36, 3.1, 20), new THREE.Vector3(5, 1.0, 5), 0xb7946e);
+      createStaticBox(new THREE.Vector3(36, 4.0, 24), new THREE.Vector3(5, 1.0, 5), 0xad8963);
+      createStaticBox(new THREE.Vector3(36, 5.0, 28), new THREE.Vector3(5, 1.0, 5), 0xa37f59);
+      createStaticBox(new THREE.Vector3(36, 6.0, 32), new THREE.Vector3(5, 1.0, 5), 0x99744f);
+      createStaticBox(new THREE.Vector3(36, 7.0, 35), new THREE.Vector3(5, 1.0, 4), 0x8f6a45);
+      createStaticBox(new THREE.Vector3(36, 8.0, 34), new THREE.Vector3(5, 1.0, 4), 0x855f3b);
+      createStaticBox(new THREE.Vector3(36, 9.0, 31), new THREE.Vector3(5, 1.0, 4), 0x7b5632);
 
       // 看板柱
       createStaticBox(new THREE.Vector3(4, 2, 22), new THREE.Vector3(0.5, 4, 0.5), 0x444444);
@@ -818,6 +972,114 @@
     //  物理オブジェクト生成
     // =========================================================
 
+    function createCarMesh(size, color) {
+      const group = new THREE.Group();
+
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.55,
+        metalness: 0.08
+      });
+
+      const cabinMat = new THREE.MeshStandardMaterial({
+        color: 0xeeeeff,
+        roughness: 0.35,
+        metalness: 0.05
+      });
+
+      const wheelMat = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        roughness: 0.85
+      });
+
+      const bumperMat = new THREE.MeshStandardMaterial({
+        color: 0xdddddd,
+        roughness: 0.45,
+        metalness: 0.25
+      });
+
+      // 車体
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x, size.y * 0.62, size.z),
+        bodyMat
+      );
+      body.position.set(0, -size.y * 0.05, 0);
+      body.castShadow = true;
+      body.receiveShadow = true;
+      group.add(body);
+
+      // キャビン
+      const cabin = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x * 0.62, size.y * 0.55, size.z * 0.48),
+        cabinMat
+      );
+      cabin.position.set(0, size.y * 0.42, -size.z * 0.08);
+      cabin.castShadow = true;
+      cabin.receiveShadow = true;
+      group.add(cabin);
+
+      // フロント部分を少し低くして車っぽくする
+      const hood = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x * 0.9, size.y * 0.28, size.z * 0.35),
+        bodyMat
+      );
+      hood.position.set(0, size.y * 0.18, -size.z * 0.43);
+      hood.castShadow = true;
+      hood.receiveShadow = true;
+      group.add(hood);
+
+      // バンパー
+      const frontBumper = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x * 0.95, size.y * 0.18, size.z * 0.08),
+        bumperMat
+      );
+      frontBumper.position.set(0, -size.y * 0.1, -size.z * 0.54);
+      frontBumper.castShadow = true;
+      group.add(frontBumper);
+
+      const rearBumper = frontBumper.clone();
+      rearBumper.position.z = size.z * 0.54;
+      group.add(rearBumper);
+
+      // 車輪
+      const wheelGeo = new THREE.CylinderGeometry(size.y * 0.28, size.y * 0.28, size.x * 0.12, 16);
+      const wheelPositions = [
+        [-size.x * 0.54, -size.y * 0.38, -size.z * 0.33],
+        [ size.x * 0.54, -size.y * 0.38, -size.z * 0.33],
+        [-size.x * 0.54, -size.y * 0.38,  size.z * 0.33],
+        [ size.x * 0.54, -size.y * 0.38,  size.z * 0.33]
+      ];
+
+      for (const p of wheelPositions) {
+        const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+        wheel.position.set(p[0], p[1], p[2]);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.castShadow = true;
+        wheel.receiveShadow = true;
+        group.add(wheel);
+      }
+
+      // ヘッドライト
+      const lightMat = new THREE.MeshStandardMaterial({
+        color: 0xffffcc,
+        emissive: 0xffdd66,
+        emissiveIntensity: 0.35
+      });
+
+      const leftLight = new THREE.Mesh(
+        new THREE.BoxGeometry(size.x * 0.18, size.y * 0.12, size.z * 0.04),
+        lightMat
+      );
+      leftLight.position.set(-size.x * 0.27, size.y * 0.02, -size.z * 0.59);
+      group.add(leftLight);
+
+      const rightLight = leftLight.clone();
+      rightLight.position.x = size.x * 0.27;
+      group.add(rightLight);
+
+      return group;
+    }
+
     function createDynamicBox(options) {
       const {
         position,
@@ -827,21 +1089,29 @@
         hp = 50,
         score = 50,
         name = "box",
-        breakable = true
+        breakable = true,
+        visualType = "box"
       } = options;
 
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(size.x, size.y, size.z),
-        new THREE.MeshStandardMaterial({
-          color,
-          roughness: 0.72,
-          metalness: 0.02
-        })
-      );
+      let mesh;
+
+      if (visualType === "car") {
+        mesh = createCarMesh(size, color);
+      } else {
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(size.x, size.y, size.z),
+          new THREE.MeshStandardMaterial({
+            color,
+            roughness: 0.72,
+            metalness: 0.02
+          })
+        );
+
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
 
       mesh.position.copy(position);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
       scene.add(mesh);
 
       const body = new CANNON.Body({
@@ -867,6 +1137,8 @@
         score,
         name,
         breakable,
+        visualType,
+        colorHex: color,
         destroyed: false,
         lastHitTime: 0
       };
@@ -916,11 +1188,12 @@
       obj.destroyed = true;
 
       state.destroyedCount += 1;
+      state.destroyedByName[obj.name] = (state.destroyedByName[obj.name] || 0) + 1;
+
       addScore(obj.score + impactPower * 2, obj.mesh.position);
-      updateMission();
 
       const basePos = obj.mesh.position.clone();
-      const baseColor = obj.mesh.material.color.clone();
+      const baseColor = new THREE.Color(obj.colorHex ?? 0xffffff);
 
       scene.remove(obj.mesh);
       world.removeBody(obj.body);
@@ -991,7 +1264,8 @@
           hp: 180,
           score: 220,
           name: "車っぽい物体",
-          breakable: true
+          breakable: true,
+          visualType: "car"
         });
       }
 
@@ -1187,6 +1461,22 @@
       btnReset.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         resetPlayer();
+      });
+
+      missionPanelEl.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        openMissionList();
+      });
+
+      missionCloseButtonEl.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        closeMissionList();
+      });
+
+      missionOverlayEl.addEventListener("pointerdown", (event) => {
+        if (event.target === missionOverlayEl) {
+          closeMissionList();
+        }
       });
 
       setupCameraDrag();
@@ -1775,17 +2065,145 @@
     //  ミッション
     // =========================================================
 
-    function updateMission() {
-      if (state.missionCompleted) return;
-
-      missionTextEl.textContent = `箱・看板などを10個こわせ！ ${state.destroyedCount}/10`;
-
-      if (state.destroyedCount >= 10) {
-        state.missionCompleted = true;
-        missionTextEl.textContent = "ミッション達成！好きなだけ暴れよう！";
-        addScore(1000, player.mesh.position);
-        showMessage("MISSION CLEAR +1000");
+    const missions = [
+      {
+        id: "destroy10",
+        title: "破壊入門",
+        desc: "箱・看板・車などを合計10個破壊する",
+        reward: 1000,
+        progressText: () => `${state.destroyedCount}/10`,
+        check: () => state.destroyedCount >= 10
+      },
+      {
+        id: "score1000",
+        title: "スコア1000点",
+        desc: "スコアを1000点以上にする",
+        reward: 300,
+        progressText: () => `${state.score}/1000`,
+        check: () => state.score >= 1000
+      },
+      {
+        id: "score3000",
+        title: "スコア3000点",
+        desc: "スコアを3000点以上にする",
+        reward: 600,
+        progressText: () => `${state.score}/3000`,
+        check: () => state.score >= 3000
+      },
+      {
+        id: "score6000",
+        title: "スコア6000点",
+        desc: "スコアを6000点以上にする",
+        reward: 1200,
+        progressText: () => `${state.score}/6000`,
+        check: () => state.score >= 6000
+      },
+      {
+        id: "destroyCars",
+        title: "車クラッシャー",
+        desc: "車っぽい物体を2台破壊する",
+        reward: 800,
+        progressText: () => `${state.destroyedByName["車っぽい物体"] || 0}/2`,
+        check: () => (state.destroyedByName["車っぽい物体"] || 0) >= 2
+      },
+      {
+        id: "destroySigns",
+        title: "看板荒らし",
+        desc: "看板を5枚破壊する",
+        reward: 500,
+        progressText: () => `${state.destroyedByName["看板"] || 0}/5`,
+        check: () => (state.destroyedByName["看板"] || 0) >= 5
+      },
+      {
+        id: "destroyBomb",
+        title: "赤箱注意",
+        desc: "あやしい赤箱を1個破壊する",
+        reward: 700,
+        progressText: () => `${state.destroyedByName["あやしい赤箱"] || 0}/1`,
+        check: () => (state.destroyedByName["あやしい赤箱"] || 0) >= 1
       }
+    ];
+
+    function updateMission() {
+      let newlyCompleted = [];
+
+      for (const mission of missions) {
+        if (!mission.completed && mission.check()) {
+          mission.completed = true;
+          newlyCompleted.push(mission);
+        }
+      }
+
+      if (newlyCompleted.length > 0) {
+        const totalReward = newlyCompleted.reduce((sum, mission) => sum + mission.reward, 0);
+
+        if (totalReward > 0) {
+          addScore(totalReward, player.mesh.position, { skipMissionUpdate: true });
+        }
+
+        if (newlyCompleted.length === 1) {
+          showMessage(`MISSION CLEAR：${newlyCompleted[0].title} +${newlyCompleted[0].reward}`);
+        } else {
+          showMessage(`MISSION CLEAR x${newlyCompleted.length} +${totalReward}`);
+        }
+      }
+
+      const nextMission = missions.find((mission) => !mission.completed);
+
+      if (nextMission) {
+        missionTextEl.textContent = `${nextMission.title}：${nextMission.progressText()}`;
+      } else {
+        missionTextEl.textContent = "全ミッション達成！好きなだけ暴れよう！";
+      }
+
+      renderMissionList();
+    }
+
+    function renderMissionList() {
+      if (!missionListEl) return;
+
+      missionListEl.innerHTML = "";
+
+      for (const mission of missions) {
+        const item = document.createElement("div");
+        item.className = `missionItem${mission.completed ? " completed" : ""}`;
+
+        const mark = document.createElement("div");
+        mark.className = "missionMark";
+        mark.textContent = mission.completed ? "✅" : "⬜";
+
+        const body = document.createElement("div");
+
+        const name = document.createElement("div");
+        name.className = "missionName";
+        name.textContent = mission.title;
+
+        const desc = document.createElement("div");
+        desc.className = "missionDesc";
+        desc.textContent = mission.desc;
+
+        const progress = document.createElement("div");
+        progress.className = "missionProgress";
+        progress.textContent = `進捗：${mission.progressText()} / 報酬：+${mission.reward}`;
+
+        body.appendChild(name);
+        body.appendChild(desc);
+        body.appendChild(progress);
+
+        item.appendChild(mark);
+        item.appendChild(body);
+
+        missionListEl.appendChild(item);
+      }
+    }
+
+    function openMissionList() {
+      renderMissionList();
+      missionOverlayEl.classList.remove("hidden");
+    }
+
+    function closeMissionList() {
+      missionOverlayEl.classList.add("hidden");
     }
 
     // =========================================================
