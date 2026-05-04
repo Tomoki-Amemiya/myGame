@@ -645,6 +645,8 @@
     };
 
     const PLAYER_START_POSITION = new THREE.Vector3(0, 4, 0);
+    // 落下してしばらく落ちてからリセットされる高さ
+    const FALL_RESET_Y = -35;
 
     const joystick = {
       active: false,
@@ -1165,11 +1167,13 @@
         new THREE.MeshBasicMaterial({
           map: titleTexture,
           transparent: true,
-          side: THREE.DoubleSide
+          side: THREE.FrontSide
         })
       );
 
       titlePlane.position.set(4, 4.2, 21.76);
+      // PlaneGeometryの表面をプレイヤー側(-Z方向)へ向け、文字の左右反転を防ぐ
+      titlePlane.rotation.y = Math.PI;
       titlePlane.castShadow = false;
       titlePlane.receiveShadow = false;
       scene.add(titlePlane);
@@ -1611,7 +1615,8 @@ createStaticBox(
         new THREE.SphereGeometry(size.x * 0.075, 12, 12),
         markMat
       );
-      exclamationDot.position.set(0, size.y * 0.88, 0);
+      // 「！」の点だけ少し下げて、棒との隙間を見やすくする
+      exclamationDot.position.set(0, size.y * 0.84, 0);
       exclamationDot.castShadow = true;
       group.add(exclamationDot);
 
@@ -1925,55 +1930,29 @@ createStaticBox(
       npc.waitTimer = rand(0.2, 1.2);
     }
 
+    function getRandomNPCGroundPosition() {
+      return new THREE.Vector3(rand(-42, 42), 0, rand(-42, 42));
+    }
+
+    function getRandomNPCHighPosition() {
+      return new THREE.Vector3(rand(-42, 42), rand(14, 22), rand(-42, 42));
+    }
+
     function createNPCs() {
-      createNPC({
-        type: "human",
-        name: "人",
-        position: new THREE.Vector3(-10, 0, -8),
-        color: 0x4f8cff,
-        speed: 4.2,
-        wanderRadius: 12
-      });
+      const npcConfigs = [
+        { type: "human", name: "人", color: 0x4f8cff, speed: 4.2, wanderRadius: 12 },
+        { type: "human", name: "人", color: 0xff7a7a, speed: 4.0, wanderRadius: 12 },
+        { type: "human", name: "人", color: 0x8be06a, speed: 4.4, wanderRadius: 11 },
+        { type: "dog", name: "犬", color: 0xb07a45, radius: 0.45, height: 0.9, speed: 5.4, wanderRadius: 13 },
+        { type: "dog", name: "犬", color: 0xd6b17a, radius: 0.45, height: 0.9, speed: 5.1, wanderRadius: 12 }
+      ];
 
-      createNPC({
-        type: "human",
-        name: "人",
-        position: new THREE.Vector3(18, 0, 20),
-        color: 0xff7a7a,
-        speed: 4.0,
-        wanderRadius: 12
-      });
-
-      createNPC({
-        type: "human",
-        name: "人",
-        position: new THREE.Vector3(-30, 0, 16),
-        color: 0x8be06a,
-        speed: 4.4,
-        wanderRadius: 11
-      });
-
-      createNPC({
-        type: "dog",
-        name: "犬",
-        position: new THREE.Vector3(10, 0, -30),
-        color: 0xb07a45,
-        radius: 0.45,
-        height: 0.9,
-        speed: 5.4,
-        wanderRadius: 13
-      });
-
-      createNPC({
-        type: "dog",
-        name: "犬",
-        position: new THREE.Vector3(-24, 0, 30),
-        color: 0xd6b17a,
-        radius: 0.45,
-        height: 0.9,
-        speed: 5.1,
-        wanderRadius: 12
-      });
+      for (const config of npcConfigs) {
+        createNPC({
+          ...config,
+          position: getRandomNPCGroundPosition()
+        });
+      }
     }
 
     function createDynamicBox(options) {
@@ -2047,6 +2026,8 @@ createStaticBox(
         breakable,
         visualType,
         colorHex: color,
+        // 車はタイヤが地面に埋まりやすいため、見た目だけ少し上に補正する
+        visualYOffset: visualType === "car" ? size.y * 0.28 : 0,
         destroyed: false,
         lastHitTime: 0
       };
@@ -2209,8 +2190,8 @@ createStaticBox(
           size: new THREE.Vector3(1.4, 1.4, 1.4),
           color: 0xff2222,
           mass: 2,
-          // あやしい赤箱は頭突き3回前後で壊れる程度にする
-          hp: 210,
+          // あやしい赤箱は、頭突き1回では壊れず、3回前後は耐える程度にする
+          hp: 450,
           score: 180,
           name: "あやしい赤箱",
           breakable: true,
@@ -3364,9 +3345,11 @@ createStaticBox(
     }
 
     function resetNPC(npc) {
-      const resetY = npc.size.y / 2 + 0.08;
+      const respawnPosition = getRandomNPCHighPosition();
 
-      npc.body.position.set(npc.home.x, resetY, npc.home.z);
+      // 落下後は新しいランダム位置をホームにして、高い場所から再出現させる
+      npc.home.set(respawnPosition.x, 0, respawnPosition.z);
+      npc.body.position.set(respawnPosition.x, respawnPosition.y, respawnPosition.z);
       npc.body.velocity.set(0, 0, 0);
       npc.body.angularVelocity.set(0, 0, 0);
       npc.body.force.set(0, 0, 0);
@@ -3376,6 +3359,7 @@ createStaticBox(
 
       npc.stunTimer = 0;
       npc.isWalking = false;
+      npc.retargetTimer = rand(2.0, 4.0);
       chooseNewNPCTarget(npc);
     }
 
@@ -3406,7 +3390,7 @@ createStaticBox(
         }
 
         // 落下しすぎた場合は初期位置へ戻す
-        if (npc.body.position.y < -4) {
+        if (npc.body.position.y < FALL_RESET_Y) {
           resetNPC(npc);
           npc.retargetTimer = rand(2.0, 4.0);
           continue;
@@ -3567,6 +3551,10 @@ createStaticBox(
 
         syncMeshWithBody(obj.mesh, obj.body);
 
+        if (obj.visualYOffset) {
+          obj.mesh.position.y += obj.visualYOffset;
+        }
+
         // 遠くへ落ちすぎた物は戻す
         if (obj.body.position.y < -20) {
           obj.body.position.set(rand(-20, 20), rand(4, 10), rand(-20, 20));
@@ -3668,7 +3656,7 @@ createStaticBox(
         animateNPCMeshes(delta);
 
         // プレイヤーが落ちたら復帰
-        if (player.body.position.y < -4) {
+        if (player.body.position.y < FALL_RESET_Y) {
           resetPlayer();
           showMessage("落下！初期位置に戻りました");
         }
