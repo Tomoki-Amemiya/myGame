@@ -550,7 +550,12 @@
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb);
+
+    // 元の空の設定
+    // scene.background = new THREE.Color(0x87ceeb);
+    // 下記に変更
+    scene.background = textures.sky;
+
     scene.fog = new THREE.Fog(0x87ceeb, 45, 120);
 
     const camera = new THREE.PerspectiveCamera(
@@ -788,6 +793,99 @@
       });
     }
 
+    function createNoiseTexture({
+      baseColor = "#ffffff",
+      noiseColor = "#cccccc",
+      size = 256,
+      cellSize = 8,
+      lineColor = null,
+      lineEvery = 32
+    } = {}) {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+
+      const ctx = canvas.getContext("2d");
+
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(0, 0, size, size);
+
+      for (let y = 0; y < size; y += cellSize) {
+        for (let x = 0; x < size; x += cellSize) {
+          const alpha = Math.random() * 0.18;
+          ctx.fillStyle = noiseColor;
+          ctx.globalAlpha = alpha;
+          ctx.fillRect(x, y, cellSize, cellSize);
+        }
+      }
+
+      ctx.globalAlpha = 1;
+
+      if (lineColor) {
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1;
+
+        for (let i = 0; i <= size; i += lineEvery) {
+          ctx.beginPath();
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i, size);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(0, i);
+          ctx.lineTo(size, i);
+          ctx.stroke();
+        }
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.anisotropy = 4;
+      texture.needsUpdate = true;
+
+      return texture;
+    }
+
+    function createStripeTexture({
+      baseColor = "#666666",
+      stripeColor = "#777777",
+      lineColor = "#ffffff",
+      size = 256
+    } = {}) {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+
+      const ctx = canvas.getContext("2d");
+
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(0, 0, size, size);
+
+      for (let y = 0; y < size; y += 24) {
+        ctx.fillStyle = stripeColor;
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(0, y, size, 10);
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 4;
+      ctx.setLineDash([18, 18]);
+      ctx.beginPath();
+      ctx.moveTo(size / 2, 0);
+      ctx.lineTo(size / 2, size);
+      ctx.stroke();
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.anisotropy = 4;
+      texture.needsUpdate = true;
+
+      return texture;
+    }
+
     // =========================================================
     //  ライト
     // =========================================================
@@ -807,14 +905,77 @@
     scene.add(sun);
 
     // =========================================================
+    //  テクスチャ
+    // =========================================================
+
+    const textures = {
+      grass: createNoiseTexture({
+        baseColor: "#6fc05d",
+        noiseColor: "#3f9b42",
+        size: 256,
+        cellSize: 6,
+        lineColor: "rgba(255,255,255,0.10)",
+        lineEvery: 32
+      }),
+
+      road: createStripeTexture({
+        baseColor: "#4e4e4e",
+        stripeColor: "#5f5f5f",
+        lineColor: "rgba(255,255,255,0.75)",
+        size: 256
+      }),
+
+      wood: createNoiseTexture({
+        baseColor: "#b98243",
+        noiseColor: "#6d421d",
+        size: 256,
+        cellSize: 10,
+        lineColor: "rgba(70,35,10,0.22)",
+        lineEvery: 48
+      }),
+
+      cardboard: createNoiseTexture({
+        baseColor: "#c98b43",
+        noiseColor: "#8e5a24",
+        size: 256,
+        cellSize: 8,
+        lineColor: "rgba(80,45,18,0.18)",
+        lineEvery: 64
+      }),
+
+      board: createNoiseTexture({
+        baseColor: "#ffee55",
+        noiseColor: "#caa900",
+        size: 256,
+        cellSize: 8,
+        lineColor: "rgba(100,80,0,0.18)",
+        lineEvery: 40
+      }),
+
+      sky: createNoiseTexture({
+        baseColor: "#87ceeb",
+        noiseColor: "#ffffff",
+        size: 256,
+        cellSize: 18
+      })
+    };
+
+    textures.grass.repeat.set(18, 18);
+    textures.road.repeat.set(1.5, 12);
+    textures.wood.repeat.set(2, 2);
+    textures.cardboard.repeat.set(2, 2);
+    textures.board.repeat.set(1, 2);
+
+    // =========================================================
     //  地面・フィールド
     // =========================================================
 
     function createGround() {
       const groundGeo = new THREE.PlaneGeometry(110, 110, 12, 12);
       const groundMat = new THREE.MeshStandardMaterial({
-        color: 0x6fc05d,
-        roughness: 0.9,
+        map: textures.grass,
+        color: 0xffffff,
+        roughness: 0.95,
         metalness: 0.0
       });
 
@@ -843,35 +1004,32 @@
     }
 
     function createBoundary() {
-      // 外枠は createStaticBox で統一して作成する。
-      // 以前の厚さ1の壁だと、高速移動時に1方向だけ抜けることがあるため、
-      // 厚めの壁にして4方向すべての当たり判定を安定化する。
       const wallColor = 0x5d8050;
 
       createStaticBox(
-        new THREE.Vector3(0, 2, -56),
-        new THREE.Vector3(114, 4, 3),
+        new THREE.Vector3(0, 1, -56),
+        new THREE.Vector3(114, 2, 3),
         wallColor,
         { name: "boundaryBack", friction: 0.2, restitution: 0.02 }
       );
 
       createStaticBox(
-        new THREE.Vector3(0, 2, 56),
-        new THREE.Vector3(114, 4, 3),
+        new THREE.Vector3(0, 1, 56),
+        new THREE.Vector3(114, 2, 3),
         wallColor,
         { name: "boundaryFront", friction: 0.2, restitution: 0.02 }
       );
 
       createStaticBox(
-        new THREE.Vector3(-56, 2, 0),
-        new THREE.Vector3(3, 4, 114),
+        new THREE.Vector3(-56, 1, 0),
+        new THREE.Vector3(3, 2, 114),
         wallColor,
         { name: "boundaryLeft", friction: 0.2, restitution: 0.02 }
       );
 
       createStaticBox(
-        new THREE.Vector3(56, 2, 0),
-        new THREE.Vector3(3, 4, 114),
+        new THREE.Vector3(56, 1, 0),
+        new THREE.Vector3(3, 2, 114),
         wallColor,
         { name: "boundaryRight", friction: 0.2, restitution: 0.02 }
       );
@@ -887,9 +1045,15 @@
 
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(size.x, size.y, size.z),
+        const useWoodTexture =
+          name.includes("brown") ||
+          name.includes("Stair") ||
+          name === "staticBox";
+
         new THREE.MeshStandardMaterial({
+          map: useWoodTexture ? textures.wood : null,
           color,
-          roughness: 0.75
+          roughness: 0.8
         })
       );
 
@@ -950,7 +1114,11 @@
       // 道路
       const road = new THREE.Mesh(
         new THREE.BoxGeometry(14, 0.08, 105),
-        new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 })
+        new THREE.MeshStandardMaterial({
+          map: textures.road,
+          color: 0xffffff,
+          roughness: 0.88
+        })
       );
       road.position.set(-18, 0.04, 0);
       road.receiveShadow = true;
@@ -1764,14 +1932,23 @@ createStaticBox(
       } else if (visualType === "dangerBox") {
         mesh = createDangerBoxMesh(size, color);
       } else {
-        mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(size.x, size.y, size.z),
-          new THREE.MeshStandardMaterial({
-            color,
-            roughness: 0.72,
-            metalness: 0.02
-          })
-        );
+          let objectTexture = null;
+
+          if (name === "箱") {
+            objectTexture = textures.cardboard;
+          } else if (name === "板") {
+            objectTexture = textures.board;
+          }
+
+          mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(size.x, size.y, size.z),
+            new THREE.MeshStandardMaterial({
+              map: objectTexture,
+              color: objectTexture ? 0xffffff : color,
+              roughness: 0.72,
+              metalness: 0.02
+            })
+          );
 
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -2774,18 +2951,48 @@ createStaticBox(
     }
 
     function createLickLine() {
-      const geo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, -1)
-      ]);
-
-      const mat = new THREE.LineBasicMaterial({
+      // THREE.Line の linewidth は多くのブラウザで太く表示されないため、
+      // 円柱メッシュで太いベロを表現する
+      const geo = new THREE.CylinderGeometry(0.055, 0.055, 1, 12);
+      const mat = new THREE.MeshStandardMaterial({
         color: 0xff5aa5,
-        linewidth: 3
+        emissive: 0x772244,
+        emissiveIntensity: 0.25,
+        roughness: 0.45
       });
 
-      state.lickLine = new THREE.Line(geo, mat);
+      state.lickLine = new THREE.Mesh(geo, mat);
+      state.lickLine.castShadow = false;
+      state.lickLine.receiveShadow = false;
       scene.add(state.lickLine);
+    }
+
+    function updateLickCylinder(start, end) {
+      if (!state.lickLine) return;
+
+      const direction = end.clone().sub(start);
+      const length = direction.length();
+
+      if (length <= 0.001) {
+        state.lickLine.visible = false;
+        return;
+      }
+
+      state.lickLine.visible = true;
+
+      const mid = start.clone().add(end).multiplyScalar(0.5);
+      state.lickLine.position.copy(mid);
+
+      // CylinderGeometry は初期状態でY軸方向に伸びるので、
+      // Y軸を start→end 方向へ向ける
+      const quat = new THREE.Quaternion();
+      quat.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        direction.normalize()
+      );
+
+      state.lickLine.quaternion.copy(quat);
+      state.lickLine.scale.set(1, length, 1);
     }
 
     function releaseLick() {
@@ -2891,12 +3098,8 @@ createStaticBox(
       }
 
       if (state.lickLine) {
-        const positions = state.lickLine.geometry.attributes.position;
-        positions.setXYZ(0, mouthPos.x, mouthPos.y, mouthPos.z);
-        positions.setXYZ(1, objPos.x, objPos.y, objPos.z);
-        positions.needsUpdate = true;
+        updateLickCylinder(mouthPos, objPos);
       }
-
       // ベロで移動させるだけではスコア加算しない
     }
 
