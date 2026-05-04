@@ -632,6 +632,7 @@
       lickTarget: null,
       lickLine: null,
       missionCompleted: false,
+      hasLegendarySword: false,
       messageTimer: 0
     };
 
@@ -1158,7 +1159,8 @@
     function createTitleSign() {
       // 当たり判定用の柱と看板本体は createStaticBox で維持する
       createStaticBox(new THREE.Vector3(4, 2, 22), new THREE.Vector3(0.5, 4, 0.5), 0x2b2114, { name: "titleSignPole" });
-      createStaticBox(new THREE.Vector3(4, 4.2, 22), new THREE.Vector3(5, 2, 0.4), 0xffda4f, { name: "titleSignBoard" });
+      // 柱が文字に重なりにくいよう、看板本体を少し上へ移動
+      createStaticBox(new THREE.Vector3(4, 4.85, 22), new THREE.Vector3(5, 2, 0.4), 0xffda4f, { name: "titleSignBoard" });
 
       // 表示用テキスト面。薄い板の前面に少しだけ浮かせて貼る。
       const titleTexture = createTitleTexture();
@@ -1171,7 +1173,7 @@
         })
       );
 
-      titlePlane.position.set(4, 4.2, 21.76);
+      titlePlane.position.set(4, 4.85, 21.76);
       // PlaneGeometryの表面をプレイヤー側(-Z方向)へ向け、文字の左右反転を防ぐ
       titlePlane.rotation.y = Math.PI;
       titlePlane.castShadow = false;
@@ -1322,6 +1324,9 @@ createStaticBox(
 
       // タイトル看板
       createTitleSign();
+
+      // 茶色の大きい高台の上に伝説の剣を配置
+      createLegendarySword(new THREE.Vector3(36, 11.25, 28));
     }
 
     // =========================================================
@@ -1955,6 +1960,167 @@ createStaticBox(
       }
     }
 
+    function createLegendarySwordMesh() {
+      const group = new THREE.Group();
+
+      const bladeMat = new THREE.MeshStandardMaterial({
+        color: 0xcfe8ff,
+        emissive: 0x77ccff,
+        emissiveIntensity: 0.65,
+        roughness: 0.18,
+        metalness: 0.85
+      });
+
+      const edgeMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0x99eaff,
+        emissiveIntensity: 0.9,
+        roughness: 0.12,
+        metalness: 0.9
+      });
+
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: 0xffd45a,
+        emissive: 0xaa7a00,
+        emissiveIntensity: 0.45,
+        roughness: 0.28,
+        metalness: 0.65
+      });
+
+      const gemMat = new THREE.MeshStandardMaterial({
+        color: 0x66ffff,
+        emissive: 0x33ffff,
+        emissiveIntensity: 1.4,
+        roughness: 0.15,
+        metalness: 0.2
+      });
+
+      const handleMat = new THREE.MeshStandardMaterial({
+        color: 0x2b1b55,
+        roughness: 0.55,
+        metalness: 0.25
+      });
+
+      // 光る台座。剣を抜く対象だと分かりやすくする
+      const pedestal = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.52, 0.72, 0.28, 24),
+        new THREE.MeshStandardMaterial({
+          color: 0x445566,
+          emissive: 0x113344,
+          emissiveIntensity: 0.35,
+          roughness: 0.55,
+          metalness: 0.15
+        })
+      );
+      pedestal.position.set(0, -0.96, 0);
+      pedestal.castShadow = true;
+      pedestal.receiveShadow = true;
+      group.add(pedestal);
+      group.userData.pedestal = pedestal;
+
+      // 刀身
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.55, 0.09), bladeMat);
+      blade.position.set(0, -0.34, 0);
+      blade.castShadow = true;
+      group.add(blade);
+
+      // 先端
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.38, 4), edgeMat);
+      tip.position.set(0, -1.28, 0);
+      tip.rotation.y = Math.PI / 4;
+      tip.rotation.z = Math.PI;
+      tip.castShadow = true;
+      group.add(tip);
+
+      // 刀身の中心の光線
+      const bladeCore = new THREE.Mesh(new THREE.BoxGeometry(0.055, 1.48, 0.105), edgeMat);
+      bladeCore.position.set(0, -0.34, 0.003);
+      group.add(bladeCore);
+
+      // 鍔
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.14, 0.16), goldMat);
+      guard.position.set(0, 0.47, 0);
+      guard.castShadow = true;
+      group.add(guard);
+
+      // 柄
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.55, 16), handleMat);
+      handle.position.set(0, 0.88, 0);
+      handle.castShadow = true;
+      group.add(handle);
+
+      // 宝石
+      const gem = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 16), gemMat);
+      gem.position.set(0, 0.47, 0.11);
+      group.add(gem);
+
+      const aura = new THREE.Mesh(
+        new THREE.SphereGeometry(1.08, 32, 32),
+        new THREE.MeshBasicMaterial({
+          color: 0x77ddff,
+          transparent: true,
+          opacity: 0.16,
+          depthWrite: false
+        })
+      );
+      aura.position.set(0, 0.02, 0);
+      group.add(aura);
+
+      const light = new THREE.PointLight(0x77ddff, 2.8, 10);
+      light.position.set(0, 0.9, 0);
+      group.add(light);
+
+      group.userData.aura = aura;
+      group.userData.light = light;
+      group.userData.animTime = 0;
+
+      return group;
+    }
+
+    function createLegendarySword(position = new THREE.Vector3(36, 11.25, 28)) {
+      const mesh = createLegendarySwordMesh();
+      mesh.position.copy(position);
+      enableShadowForObject3D(mesh);
+      scene.add(mesh);
+
+      const bodySize = new THREE.Vector3(0.75, 2.45, 0.75);
+      const body = new CANNON.Body({
+        mass: 1.2,
+        material: defaultMaterial,
+        linearDamping: 0.28,
+        angularDamping: 0.85,
+        fixedRotation: true,
+        shape: new CANNON.Box(new CANNON.Vec3(bodySize.x / 2, bodySize.y / 2, bodySize.z / 2))
+      });
+
+      body.position.set(position.x, position.y, position.z);
+      body.allowSleep = false;
+      world.addBody(body);
+      body.wakeUp();
+
+      const sword = {
+        mesh,
+        body,
+        size: bodySize,
+        hp: 999999,
+        maxHp: 999999,
+        score: 0,
+        name: "伝説の剣",
+        breakable: false,
+        visualType: "legendarySword",
+        colorHex: 0x77ddff,
+        destroyed: false,
+        isLegendarySword: true,
+        visualYOffset: 0,
+        lastHitTime: 0
+      };
+
+      body.userData = sword;
+      gameObjects.push(sword);
+
+      return sword;
+    }
+
     function createDynamicBox(options) {
       const {
         position,
@@ -2518,7 +2684,8 @@ createStaticBox(
         lastY = event.clientY;
 
         state.cameraYaw -= dx * 0.006;
-        state.cameraPitch = clamp(state.cameraPitch + dy * 0.004, -0.05, 0.75);
+        // 上下方向を今までより大きく見回せるようにする
+        state.cameraPitch = clamp(state.cameraPitch + dy * 0.006, -1.35, 1.35);
       });
 
       canvas.addEventListener("pointerup", () => {
@@ -2813,6 +2980,10 @@ createStaticBox(
         Math.cos(player.visualYaw)
       ).normalize();
 
+      // 伝説の剣をベロで保持している間だけ、頭突きの吹き飛ばし力を大幅強化
+      const hasLegendarySwordPower = !!(state.lickTarget && state.lickTarget.isLegendarySword);
+      const legendaryPowerMultiplier = hasLegendarySwordPower ? 20 : 1;
+
       let hitSomething = false;
 
       for (const obj of [...gameObjects]) {
@@ -2838,8 +3009,8 @@ createStaticBox(
 
         if (obj.isNPC) {
           // NPCは破壊不能。ただし、頭突きでは派手に吹き飛ばす。
-          const npcImpulsePower = impulsePower * (obj.npcType === "dog" ? 3.4 : 3.0);
-          const upwardPower = obj.npcType === "dog" ? 11.5 : 12.5;
+          const npcImpulsePower = impulsePower * (obj.npcType === "dog" ? 3.4 : 3.0) * legendaryPowerMultiplier;
+          const upwardPower = (obj.npcType === "dog" ? 11.5 : 12.5) * (hasLegendarySwordPower ? 2.4 : 1);
 
           obj.stunTimer = 2.0;
           obj.isWalking = false;
@@ -2861,11 +3032,13 @@ createStaticBox(
           continue;
         }
 
+          const effectiveImpulsePower = impulsePower * legendaryPowerMultiplier;
+
           obj.body.applyImpulse(
             new CANNON.Vec3(
-              forward.x * impulsePower,
-              4.5 + impulsePower * 0.18,
-              forward.z * impulsePower
+              forward.x * effectiveImpulsePower,
+              (4.5 + impulsePower * 0.18) * (hasLegendarySwordPower ? 2.2 : 1),
+              forward.z * effectiveImpulsePower
             ),
             obj.body.position
           );
@@ -2886,8 +3059,13 @@ createStaticBox(
       );
 
       if (hitSomething) {
-        showMessage("頭突きヒット！");
-        screenShake(0.18, 0.18);
+        if (hasLegendarySwordPower) {
+          showMessage("伝説の剣パワー！");
+          screenShake(0.35, 0.5);
+        } else {
+          showMessage("頭突きヒット！");
+          screenShake(0.18, 0.18);
+        }
       } else {
         showMessage("スカッ");
       }
@@ -2922,6 +3100,30 @@ createStaticBox(
       showMessage("リセット！");
     }
 
+
+    function pullLegendarySwordFromStone(target) {
+      if (!target || !target.isLegendarySword || !target.body) return;
+
+      // 初回にベロで掴んだ瞬間だけ、地面から引き抜かれるように上へ押し出す
+      if (!target.isPulledFromStone) {
+        target.isPulledFromStone = true;
+
+        if (target.mesh && target.mesh.userData && target.mesh.userData.pedestal) {
+          target.mesh.userData.pedestal.visible = false;
+        }
+
+        target.body.mass = 0.65;
+        target.body.fixedRotation = false;
+        target.body.updateMassProperties();
+        target.body.position.y += 1.4;
+        target.body.velocity.set(0, 7.5, 0);
+        target.body.angularVelocity.set(rand(-1.5, 1.5), rand(-1.5, 1.5), rand(-1.5, 1.5));
+        target.body.wakeUp();
+
+        showMessage("伝説の剣を引き抜いた！");
+      }
+    }
+
     // =========================================================
     //  ベロアクション
     // =========================================================
@@ -2953,6 +3155,18 @@ createStaticBox(
       target.body.wakeUp();
 
       createLickLine();
+
+      if (target.isLegendarySword) {
+        pullLegendarySwordFromStone(target);
+
+        if (!state.hasLegendarySword) {
+          state.hasLegendarySword = true;
+          updateMission();
+        }
+
+        showMessage("伝説の剣をベロで掴んだ！");
+        return;
+      }
 
       // ベロでつかむだけではスコア加算しない
       showMessage(`${target.name}をつかんだ！`);
@@ -3134,7 +3348,7 @@ createStaticBox(
       obj.body.angularVelocity.z *= 0.88;
 
       // 移動速度に上限をかけて、地面接触時の異常な吹っ飛びを抑える
-      const maxSpeed = 9.0;
+      const maxSpeed = obj.isLegendarySword ? 16.0 : 9.0;
       const currentSpeed = obj.body.velocity.length();
 
       if (currentSpeed > maxSpeed) {
@@ -3167,13 +3381,16 @@ createStaticBox(
     function updateCamera(delta) {
       const target = cannonToThreeVec3(player.body.position).add(new THREE.Vector3(0, 1.2, 0));
 
-      const distance = state.dashTime > 0 ? 8.5 : 7.2;
-      const height = 3.8 + Math.sin(state.cameraPitch) * 2.2;
+      const baseDistance = state.dashTime > 0 ? 8.5 : 7.2;
+      // cameraPitch の範囲をさらに広げたため、高さと距離も大きく変化させる
+      // 下げると低い見上げ視点、上げると高い見下ろし視点になる
+      const horizontalDistance = clamp(baseDistance * Math.cos(state.cameraPitch * 0.65), 3.6, baseDistance);
+      const height = clamp(4.2 + Math.sin(state.cameraPitch) * 8.5, -1.6, 15.2);
 
       const offset = new THREE.Vector3(
-        -Math.sin(state.cameraYaw) * distance,
+        -Math.sin(state.cameraYaw) * horizontalDistance,
         height,
-        -Math.cos(state.cameraYaw) * distance
+        -Math.cos(state.cameraYaw) * horizontalDistance
       );
 
       const desired = target.clone().add(offset);
@@ -3249,6 +3466,14 @@ createStaticBox(
         reward: 300,
         progressText: () => `${state.destroyedByName["あやしい赤箱"] || 0}/1`,
         check: () => (state.destroyedByName["あやしい赤箱"] || 0) >= 1
+      },
+      {
+        id: "getLegendarySword",
+        title: "伝説の剣",
+        desc: "大きな高台の上にある伝説の剣をベロで手に入れる",
+        reward: 500,
+        progressText: () => state.hasLegendarySword ? "1/1" : "0/1",
+        check: () => state.hasLegendarySword
       },
       {
         id: "score10000",
@@ -3553,6 +3778,17 @@ createStaticBox(
 
         if (obj.visualYOffset) {
           obj.mesh.position.y += obj.visualYOffset;
+        }
+
+        if (obj.isLegendarySword && obj.mesh.userData) {
+          obj.mesh.userData.animTime = (obj.mesh.userData.animTime || 0) + 0.035;
+          const t = obj.mesh.userData.animTime;
+          if (obj.mesh.userData.aura) {
+            obj.mesh.userData.aura.scale.setScalar(1 + Math.sin(t * 2.2) * 0.08);
+          }
+          if (obj.mesh.userData.light) {
+            obj.mesh.userData.light.intensity = 2.6 + Math.sin(t * 3.0) * 0.55;
+          }
         }
 
         // 遠くへ落ちすぎた物は戻す
