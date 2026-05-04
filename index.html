@@ -447,6 +447,7 @@
 
     const state = {
       started: false,
+      startProtectionTimer: 0,
       score: 0,
       comboCount: 0,
       comboMultiplier: 1,
@@ -483,6 +484,7 @@
 
     const gameObjects = [];
     const destructibles = [];
+    const staticPlatforms = [];
 
     // =========================================================
     //  汎用関数
@@ -682,6 +684,13 @@
       body.position.set(position.x, position.y, position.z);
       world.addBody(body);
 
+      // 固定オブジェクトの上に乗ったときもジャンプできるように、足場候補として保持する
+      staticPlatforms.push({
+        body,
+        position: position.clone(),
+        size: size.clone()
+      });
+
       return { mesh, body };
     }
 
@@ -877,6 +886,11 @@
 
     function handleObjectCollision(obj, event) {
       if (!obj.breakable || obj.destroyed) return;
+
+      // ゲーム開始直後は、落下による初期衝突で破壊・スコア加算しない
+      if (state.startProtectionTimer > 0) {
+        return;
+      }
 
       // ベロでつかんでいる間は、地面や他オブジェクトにぶつかっても壊れない
       // ベロを離した後は通常どおり壊れる
@@ -1334,17 +1348,12 @@
     }
 
     function checkGrounded() {
-      const from = new CANNON.Vec3(
-        player.body.position.x,
-        player.body.position.y,
-        player.body.position.z
-      );
+      const playerX = player.body.position.x;
+      const playerY = player.body.position.y;
+      const playerZ = player.body.position.z;
 
-      const to = new CANNON.Vec3(
-        player.body.position.x,
-        player.body.position.y - 1.35,
-        player.body.position.z
-      );
+      const from = new CANNON.Vec3(playerX, playerY, playerZ);
+      const to = new CANNON.Vec3(playerX, playerY - 1.75, playerZ);
 
       const ray = new CANNON.Ray(from, to);
       const result = new CANNON.RaycastResult();
@@ -1352,16 +1361,44 @@
       ray.intersectWorld(world, {
         mode: CANNON.Ray.CLOSEST,
         result,
-        skipBackfaces: true
+        skipBackfaces: false
       });
 
-      // 通常の地面上ではプレイヤー中心Yがだいたい 0.7〜1.0 付近になる。
-      // Ray判定に加えて、高さとY速度でも補助判定する。
-      const nearGround =
-        player.body.position.y <= 1.05 &&
-        Math.abs(player.body.velocity.y) < 1.2;
+      const rayHitGround =
+        result.hasHit &&
+        result.body !== player.body;
 
-      state.isGrounded = result.hasHit || nearGround;
+      // 通常地面の補助判定
+      const nearBaseGround =
+        playerY <= 1.08 &&
+        Math.abs(player.body.velocity.y) < 1.5;
+
+      // 固定オブジェクトの上面に乗っている場合の補助判定
+      let onStaticPlatform = false;
+
+      for (const platform of staticPlatforms) {
+        const topY = platform.position.y + platform.size.y / 2;
+        const expectedPlayerCenterY = topY + 0.72;
+
+        const withinX =
+          Math.abs(playerX - platform.position.x) <= platform.size.x / 2 + 0.75;
+
+        const withinZ =
+          Math.abs(playerZ - platform.position.z) <= platform.size.z / 2 + 0.75;
+
+        const nearTop =
+          Math.abs(playerY - expectedPlayerCenterY) <= 0.45;
+
+        const notFlyingUpFast =
+          player.body.velocity.y <= 1.8;
+
+        if (withinX && withinZ && nearTop && notFlyingUpFast) {
+          onStaticPlatform = true;
+          break;
+        }
+      }
+
+      state.isGrounded = rayHitGround || nearBaseGround || onStaticPlatform;
     }
 
     function jump() {
@@ -1417,6 +1454,9 @@
 
       for (const obj of [...gameObjects]) {
         if (!obj.body || obj.destroyed || obj.body.mass <= 0) continue;
+
+        // ベロで掴んでいるオブジェクトは、頭突きでは壊さない・吹き飛ばさない
+        if (state.lickTarget === obj) continue;
 
         const objPos = cannonToThreeVec3(obj.body.position);
         const toObj = objPos.clone().sub(playerPos);
@@ -1803,7 +1843,12 @@
       startButton.addEventListener("pointerdown", () => {
         startOverlay.style.display = "none";
         state.started = true;
-        showMessage("ゲーム開始！");
+
+        // ゲーム開始直後、空中配置オブジェクトが地面に落ちるまでの間は
+        // 衝突破壊・衝突スコアを発生させない
+        state.startProtectionTimer = 3.0;
+
+        showMessage("ゲーム開始！準備中...");
       });
 
       animate();
@@ -1830,6 +1875,14 @@
       const delta = Math.min(clock.getDelta(), 0.05);
 
       if (state.started) {
+        if (state.startProtectionTimer > 0) {
+          state.startProtectionTimer = Math.max(0, state.startProtectionTimer - delta);
+
+          if (state.startProtectionTimer === 0) {
+            showMessage("暴れてOK！");
+          }
+        }
+
         updatePlayer(delta);
         updateCombo(delta);
         updateMessage(delta);
