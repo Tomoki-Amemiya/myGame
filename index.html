@@ -550,7 +550,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
-      <div id="versionText">Ver.1.2.3</div>
+      <div id="versionText">Ver.1.2.4</div>
     </div>
   </div>
 
@@ -983,6 +983,52 @@
       const dx = a.x - b.x;
       const dz = a.z - b.z;
       return Math.hypot(dx, dz);
+    }
+
+    function getNPCGroundInfo(npc) {
+      if (!npc || !npc.body || !npc.size) {
+        return { grounded: false, snapY: null };
+      }
+
+      const x = npc.body.position.x;
+      const y = npc.body.position.y;
+      const z = npc.body.position.z;
+      const halfY = npc.size.y / 2;
+      const bottomY = y - halfY;
+      const notFlyingUpFast = npc.body.velocity.y <= 1.25;
+
+      const withinGround =
+        Math.abs(x) <= FIELD_HALF_SIZE + 0.4 &&
+        Math.abs(z) <= FIELD_HALF_SIZE + 0.4;
+
+      if (withinGround && bottomY <= 0.16 && bottomY >= -0.45 && notFlyingUpFast) {
+        return { grounded: true, snapY: halfY + 0.04 };
+      }
+
+      for (const platform of staticPlatforms) {
+        const topY = platform.position.y + platform.size.y / 2;
+        const withinX = Math.abs(x - platform.position.x) <= platform.size.x / 2 + 0.55;
+        const withinZ = Math.abs(z - platform.position.z) <= platform.size.z / 2 + 0.55;
+        const nearTop = bottomY >= topY - 0.22 && bottomY <= topY + 0.34;
+
+        if (withinX && withinZ && nearTop && notFlyingUpFast) {
+          return { grounded: true, snapY: topY + halfY + 0.03 };
+        }
+      }
+
+      return { grounded: false, snapY: null };
+    }
+
+    function lockNPCAfterCannonLaunch(npc) {
+      if (!npc || !npc.isNPC) return;
+
+      // 大砲で飛ばされた直後は、空中で自律歩行を再開しないようにする。
+      // 特に犬型NPCは体高が低く、従来は stunTimer 終了後に空中で歩き始めて、
+      // そのまま空中移動して浮いた位置に戻ることがあった。
+      npc.cannonAirborneLock = true;
+      npc.cannonFlightTimer = npc.npcType === "dog" ? 9.0 : 6.0;
+      npc.stunTimer = Math.max(npc.stunTimer || 0, 0.45);
+      npc.isWalking = false;
     }
 
     function createNoiseTexture({
@@ -2109,8 +2155,7 @@
         updateMission();
 
         if (target.obj && target.obj.isNPC) {
-          target.obj.stunTimer = 2.8;
-          target.obj.isWalking = false;
+          lockNPCAfterCannonLaunch(target.obj);
         }
 
         cannon.countdownTarget = null;
@@ -3149,7 +3194,11 @@ createStaticBox(
         isWalking: false,
 
         // NPCの見た目だけ上下補正する
-        visualYOffset: isDog ? -0.16 : -0.30
+        visualYOffset: isDog ? -0.16 : -0.30,
+
+        // 大砲で飛ばされた後、着地するまで自律歩行を止めるための状態
+        cannonAirborneLock: false,
+        cannonFlightTimer: 0
       };
 
       body.userData = npc;
@@ -5415,6 +5464,8 @@ createStaticBox(
 
       npc.stunTimer = 0;
       npc.isWalking = false;
+      npc.cannonAirborneLock = false;
+      npc.cannonFlightTimer = 0;
       npc.retargetTimer = rand(2.0, 4.0);
       chooseNewNPCTarget(npc);
     }
@@ -5437,18 +5488,47 @@ createStaticBox(
           continue;
         }
 
+        // 落下しすぎた場合は初期位置へ戻す
+        if (npc.body.position.y < FALL_RESET_Y) {
+          resetNPC(npc);
+          npc.retargetTimer = rand(2.0, 4.0);
+          continue;
+        }
+
+        const groundInfo = getNPCGroundInfo(npc);
+
+        // 大砲で飛ばされたNPCは、着地するまで自律移動を再開させない。
+        // これにより、犬型NPCが空中で歩行を始めてマップ内へ戻ってくる挙動を防ぐ。
+        if (npc.cannonAirborneLock) {
+          npc.isWalking = false;
+          npc.walkAnimTime += delta * 5;
+          npc.cannonFlightTimer = Math.max(0, (npc.cannonFlightTimer || 0) - delta);
+
+          if (!groundInfo.grounded || Math.abs(npc.body.velocity.y) > 1.25) {
+            continue;
+          }
+
+          npc.cannonAirborneLock = false;
+          npc.cannonFlightTimer = 0;
+          npc.stunTimer = Math.max(npc.stunTimer || 0, 0.35);
+          npc.isWalking = false;
+
+          // 犬型NPCは背が低いため、着地直後に少し浮いた表示になりやすい。
+          // 地面/足場の上面に近い場合だけ物理位置を軽く補正する。
+          if (npc.npcType === "dog" && groundInfo.snapY !== null) {
+            npc.body.position.y = groundInfo.snapY;
+            if (npc.body.velocity.y > 0) npc.body.velocity.y = 0;
+          }
+
+          chooseNewNPCTarget(npc);
+          continue;
+        }
+
         // 頭突きなどで吹き飛ばされた直後は、自律移動で速度を上書きしない
         if (npc.stunTimer > 0) {
           npc.isWalking = false;
           npc.stunTimer = Math.max(0, npc.stunTimer - delta);
           npc.walkAnimTime += delta * 8;
-          continue;
-        }
-
-        // 落下しすぎた場合は初期位置へ戻す
-        if (npc.body.position.y < FALL_RESET_Y) {
-          resetNPC(npc);
-          npc.retargetTimer = rand(2.0, 4.0);
           continue;
         }
 
