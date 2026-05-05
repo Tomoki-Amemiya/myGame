@@ -531,7 +531,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
-      <div id="versionText">Ver.1.1.20</div>
+      <div id="versionText">Ver.1.2.1</div>
     </div>
   </div>
 
@@ -772,6 +772,14 @@
     // 爆発エフェクト
     const explosionEffects = [];
 
+    // マップギミック：ジャンプ台
+    const jumpPads = [];
+
+    // マップギミック：大砲
+    const cannons = [];
+    // 大砲の砲身の上向き角度です。地面と平行ではなく、斜め上に発射します。
+    const CANNON_PITCH = Math.PI / 6;
+
     // 灰色高台の上に置くスポーンボタン
     const spawnButton = {
       mesh: null,
@@ -797,128 +805,6 @@
 
     function rand(min, max) {
       return min + Math.random() * (max - min);
-    }
-
-
-    // =========================================================
-    //  効果音
-    // =========================================================
-    // 外部音声ファイルを使わず、Web Audio APIで短い効果音を生成します。
-    // ブラウザ仕様上、STARTボタンなどのユーザー操作後に音が有効になります。
-    let audioContext = null;
-
-    function getAudioContext() {
-      if (!audioContext) {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) return null;
-        audioContext = new AudioContextClass();
-      }
-      return audioContext;
-    }
-
-    function resumeAudio() {
-      const ctx = getAudioContext();
-      if (ctx && ctx.state === "suspended") {
-        ctx.resume();
-      }
-    }
-
-    function createGainNode(ctx, volume, startTime, endTime) {
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0001, startTime);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), startTime + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
-      gain.connect(ctx.destination);
-      return gain;
-    }
-
-    function playTone({ frequency = 440, endFrequency = null, duration = 0.16, type = "sine", volume = 0.18, delay = 0 }) {
-      const ctx = getAudioContext();
-      if (!ctx || ctx.state !== "running") return;
-
-      const now = ctx.currentTime + delay;
-      const end = now + duration;
-      const osc = ctx.createOscillator();
-      const gain = createGainNode(ctx, volume, now, end);
-
-      osc.type = type;
-      osc.frequency.setValueAtTime(frequency, now);
-      if (endFrequency !== null) {
-        osc.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), end);
-      }
-
-      osc.connect(gain);
-      osc.start(now);
-      osc.stop(end + 0.02);
-    }
-
-    function playNoise({ duration = 0.18, volume = 0.18, delay = 0, filterFrequency = 900, filterType = "bandpass" }) {
-      const ctx = getAudioContext();
-      if (!ctx || ctx.state !== "running") return;
-
-      const now = ctx.currentTime + delay;
-      const end = now + duration;
-      const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-
-      for (let i = 0; i < bufferSize; i++) {
-        const fade = 1 - i / bufferSize;
-        data[i] = (Math.random() * 2 - 1) * fade;
-      }
-
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-
-      const filter = ctx.createBiquadFilter();
-      filter.type = filterType;
-      filter.frequency.setValueAtTime(filterFrequency, now);
-      filter.Q.setValueAtTime(0.8, now);
-
-      const gain = createGainNode(ctx, volume, now, end);
-      source.connect(filter);
-      filter.connect(gain);
-      source.start(now);
-      source.stop(end + 0.02);
-    }
-
-    function playSound(name) {
-      switch (name) {
-        case "jump":
-          playTone({ frequency: 360, endFrequency: 760, duration: 0.14, type: "sine", volume: 0.16 });
-          playTone({ frequency: 720, endFrequency: 980, duration: 0.08, type: "triangle", volume: 0.08, delay: 0.04 });
-          break;
-
-        case "headbutt":
-          playTone({ frequency: 120, endFrequency: 62, duration: 0.13, type: "square", volume: 0.22 });
-          playNoise({ duration: 0.08, volume: 0.12, filterFrequency: 320, filterType: "lowpass" });
-          break;
-
-        case "destroy":
-          playNoise({ duration: 0.22, volume: 0.22, filterFrequency: 1200, filterType: "bandpass" });
-          playTone({ frequency: 180, endFrequency: 72, duration: 0.20, type: "sawtooth", volume: 0.12 });
-          break;
-
-        case "explosion":
-          playTone({ frequency: 95, endFrequency: 32, duration: 0.42, type: "sawtooth", volume: 0.28 });
-          playNoise({ duration: 0.42, volume: 0.28, filterFrequency: 180, filterType: "lowpass" });
-          playNoise({ duration: 0.20, volume: 0.16, delay: 0.04, filterFrequency: 900, filterType: "bandpass" });
-          break;
-
-        case "mission":
-          playTone({ frequency: 523.25, duration: 0.12, type: "triangle", volume: 0.16 });
-          playTone({ frequency: 659.25, duration: 0.12, type: "triangle", volume: 0.16, delay: 0.10 });
-          playTone({ frequency: 783.99, duration: 0.18, type: "triangle", volume: 0.18, delay: 0.20 });
-          playTone({ frequency: 1046.5, duration: 0.24, type: "sine", volume: 0.12, delay: 0.34 });
-          break;
-
-        case "sword":
-          playTone({ frequency: 659.25, duration: 0.18, type: "sine", volume: 0.13 });
-          playTone({ frequency: 987.77, duration: 0.24, type: "sine", volume: 0.14, delay: 0.10 });
-          playTone({ frequency: 1318.51, duration: 0.34, type: "triangle", volume: 0.13, delay: 0.22 });
-          playNoise({ duration: 0.18, volume: 0.05, delay: 0.18, filterFrequency: 2400, filterType: "highpass" });
-          break;
-      }
     }
 
     function showMessage(text) {
@@ -1032,6 +918,18 @@
           child.receiveShadow = true;
         }
       });
+    }
+
+    function lerpAngle(from, to, t) {
+      let diff = ((to - from + Math.PI) % (Math.PI * 2)) - Math.PI;
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      return from + diff * t;
+    }
+
+    function getHorizontalDistance(a, b) {
+      const dx = a.x - b.x;
+      const dz = a.z - b.z;
+      return Math.hypot(dx, dz);
     }
 
     function createNoiseTexture({
@@ -1657,6 +1555,354 @@
       }
     }
 
+    function getRandomJumpPadPosition() {
+      // プレイヤー初期位置・大きな高台・外枠に近すぎる位置を避けてランダム配置します。
+      for (let i = 0; i < 80; i++) {
+        const pos = new THREE.Vector3(rand(-58, 58), 0.42, rand(-58, 58));
+
+        const tooCloseToStart = getHorizontalDistance(pos, PLAYER_START_POSITION) < 10;
+        const tooCloseToBrownPlatform = getHorizontalDistance(pos, new THREE.Vector3(48, 0, 40)) < 13;
+        const tooCloseToGrayPlatform = getHorizontalDistance(pos, new THREE.Vector3(-48, 0, -36)) < 13;
+        const tooCloseToRoadCenter = Math.abs(pos.x + 18) < 9 && Math.abs(pos.z) < 45;
+
+        if (!tooCloseToStart && !tooCloseToBrownPlatform && !tooCloseToGrayPlatform && !tooCloseToRoadCenter) {
+          return pos;
+        }
+      }
+
+      return new THREE.Vector3(rand(-48, 48), 0.42, rand(-48, 48));
+    }
+
+    function createJumpPad(position = getRandomJumpPadPosition()) {
+      const pad = createDynamicBox({
+        position,
+        size: new THREE.Vector3(2.7, 0.52, 2.7),
+        color: 0x33c7ff,
+        mass: 4.5,
+        hp: 999999,
+        score: 0,
+        name: "ジャンプ台",
+        breakable: false,
+        visualType: "jumpPad"
+      });
+
+      pad.body.velocity.set(0, 0, 0);
+      pad.body.angularVelocity.set(0, 0, 0);
+      return pad;
+    }
+
+    function createJumpPads() {
+      createJumpPad(getRandomJumpPadPosition());
+      createJumpPad(getRandomJumpPadPosition());
+    }
+
+    function getCannonHorizontalDirection(cannon) {
+      const yaw = cannon ? cannon.yaw || 0 : 0;
+      return new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
+    }
+
+    function getCannonDirection(cannon) {
+      const horizontalDir = getCannonHorizontalDirection(cannon);
+      return new THREE.Vector3(
+        horizontalDir.x * Math.cos(CANNON_PITCH),
+        Math.sin(CANNON_PITCH),
+        horizontalDir.z * Math.cos(CANNON_PITCH)
+      ).normalize();
+    }
+
+    function getCannonMouthPosition(cannon) {
+      const horizontalDir = getCannonHorizontalDirection(cannon);
+      const launchDir = getCannonDirection(cannon);
+      return cannon.position.clone()
+        .add(horizontalDir.multiplyScalar(2.05))
+        .add(new THREE.Vector3(0, 0.92, 0))
+        .add(launchDir.multiplyScalar(0.55));
+    }
+
+    function syncCannonVisual(cannon) {
+      if (!cannon || !cannon.mesh) return;
+      cannon.mesh.position.copy(cannon.position);
+      cannon.mesh.rotation.y = cannon.yaw || 0;
+    }
+
+    function createCannon(position = new THREE.Vector3(26, 0.08, -28), yaw = Math.PI * 0.35) {
+      const mesh = createCannonMesh();
+      scene.add(mesh);
+
+      const body = new CANNON.Body({
+        mass: 0,
+        type: CANNON.Body.STATIC,
+        material: defaultMaterial,
+        shape: new CANNON.Box(new CANNON.Vec3(1.35, 0.9, 1.35))
+      });
+      body.position.set(position.x, position.y + 0.75, position.z);
+      body.allowSleep = false;
+      world.addBody(body);
+
+      const cannon = {
+        mesh,
+        body,
+        position: position.clone(),
+        size: new THREE.Vector3(2.7, 1.8, 2.7),
+        hp: 999999,
+        maxHp: 999999,
+        score: 0,
+        name: "大砲",
+        breakable: false,
+        visualType: "cannon",
+        colorHex: 0x333333,
+        destroyed: false,
+        isCannon: true,
+        yaw,
+        cooldown: 0,
+        countdownTarget: null,
+        countdownTimer: 0,
+        countdownLastNumber: 0
+      };
+
+      body.userData = cannon;
+      gameObjects.push(cannon);
+      cannons.push(cannon);
+      syncCannonVisual(cannon);
+      return cannon;
+    }
+
+    function createCannonGimmick() {
+      // 道路や高台にかからない、マップ中央寄りの地面へ直接固定配置します。
+      // 高台は作らず、大砲本体だけを地面に置きます。
+      createCannon(new THREE.Vector3(26, 0.08, -28), Math.PI * 0.36);
+    }
+
+    function getTargetHalfHeight(target) {
+      if (!target) return 0.8;
+      if (target.isPlayer) return 0.72;
+      if (target.obj && target.obj.size && typeof target.obj.size.y === "number") {
+        return target.obj.size.y / 2;
+      }
+      if (target.obj && target.obj.npcType === "dog") return 0.48;
+      if (target.obj && target.obj.npcType === "human") return 0.95;
+      return 0.8;
+    }
+
+    function getTargetHorizontalRadius(target) {
+      if (!target) return 0.7;
+      if (target.isPlayer) return 0.72;
+      if (target.obj && target.obj.size) {
+        return Math.max(target.obj.size.x || 0.8, target.obj.size.z || 0.8) / 2;
+      }
+      if (target.obj && target.obj.npcType === "dog") return 0.55;
+      if (target.obj && target.obj.npcType === "human") return 0.55;
+      return 0.7;
+    }
+
+    function getCannonHoldPosition(cannon, target) {
+      const horizontalDir = getCannonHorizontalDirection(cannon);
+      const dir = getCannonDirection(cannon);
+      const halfHeight = getTargetHalfHeight(target);
+
+      // 大砲の中に入っているように見える位置へ固定する。
+      // 以前より少し上げ、プレイヤーの足元が砲身下へ沈み込みすぎないようにする。
+      return cannon.position.clone()
+        .add(horizontalDir.multiplyScalar(1.35))
+        .add(new THREE.Vector3(0, 1.55 + Math.min(halfHeight * 0.25, 0.35), 0))
+        .add(dir.multiplyScalar(0.18));
+    }
+
+    function getCannonLaunchTargets() {
+      const breakableTargets = destructibles
+        .filter((obj) => obj && obj.body && !obj.destroyed && obj.breakable)
+        .map((obj) => ({ obj, body: obj.body, isPlayer: false, isBreakable: true, name: obj.name }));
+
+      return [
+        { obj: player, body: player.body, isPlayer: true, name: "自キャラ" },
+        ...npcs.map((npc) => ({ obj: npc, body: npc.body, isPlayer: false, name: npc.name })),
+        ...breakableTargets
+      ];
+    }
+
+    function isTargetInsideCannon(cannon, target) {
+      if (!cannon || !target || !target.body) return false;
+      if (target.obj && target.obj.destroyed) return false;
+      if (cannon.cooldown > 0) return false;
+
+      const mouth = getCannonMouthPosition(cannon);
+      const pos = cannonToThreeVec3(target.body.position);
+      const halfHeight = getTargetHalfHeight(target);
+      const radius = getTargetHorizontalRadius(target);
+      const horizontalDistance = getHorizontalDistance(pos, mouth);
+      const bottomY = pos.y - halfHeight;
+      const verticalDistance = Math.abs(pos.y - mouth.y);
+
+      // 自キャラ/NPCは中心が口元に入ったら反応。
+      // 破壊可能オブジェクトはサイズが大きいものもあるため、中心だけでなく底面も考慮する。
+      if (target.isBreakable) {
+        return horizontalDistance < 1.15 + Math.min(radius, 1.6) && bottomY < mouth.y + 1.1 && pos.y > mouth.y - 0.6;
+      }
+
+      return horizontalDistance < 1.25 && verticalDistance < 1.55;
+    }
+
+    function startCannonCountdown(cannon, target) {
+      cannon.countdownTarget = target;
+      cannon.countdownTimer = 3.0;
+      cannon.countdownLastNumber = 3;
+      cannon.cooldown = 0.25;
+
+      if (target.obj && target.obj.isNPC) {
+        target.obj.stunTimer = 3.6;
+        target.obj.isWalking = false;
+      }
+
+      showMessage("大砲発射まで 3");
+    }
+
+    function updateCannonCountdown(cannon, delta) {
+      const target = cannon.countdownTarget;
+      if (!target || !target.body) {
+        cannon.countdownTarget = null;
+        return;
+      }
+
+      const dir = getCannonDirection(cannon);
+      // カウントダウン中は、対象を斜め上向きの砲身の中に固定します。
+      // 自キャラ・NPC・破壊可能オブジェクトの高さを考慮して、少し上めに保持します。
+      const holdPos = getCannonHoldPosition(cannon, target);
+
+      target.body.position.set(holdPos.x, holdPos.y, holdPos.z);
+      target.body.quaternion.set(0, 0, 0, 1);
+      target.body.velocity.set(0, 0, 0);
+      target.body.angularVelocity.set(0, 0, 0);
+      target.body.wakeUp();
+
+      if (target.obj && target.obj.isNPC) {
+        target.obj.stunTimer = Math.max(target.obj.stunTimer, 0.35);
+        target.obj.isWalking = false;
+      }
+
+      cannon.countdownTimer -= delta;
+      const nextNumber = Math.ceil(cannon.countdownTimer);
+
+      if (nextNumber > 0 && nextNumber < cannon.countdownLastNumber) {
+        cannon.countdownLastNumber = nextNumber;
+        showMessage(`大砲発射まで ${nextNumber}`);
+      }
+
+      if (cannon.countdownTimer <= 0) {
+        const launchDir = getCannonHorizontalDirection(cannon);
+        // 以前の約2倍の発射威力。横方向も上方向も強めます。
+        target.body.velocity.set(launchDir.x * 56, 36, launchDir.z * 56);
+        target.body.angularVelocity.set(rand(-3, 3), rand(-6, 6), rand(-3, 3));
+        target.body.wakeUp();
+
+        if (target.obj && target.obj.isNPC) {
+          target.obj.stunTimer = 2.8;
+          target.obj.isWalking = false;
+        }
+
+        cannon.countdownTarget = null;
+        cannon.countdownTimer = 0;
+        cannon.cooldown = 1.8;
+        showMessage("大砲発射！");
+        screenShake(0.25, 0.28);
+      }
+    }
+
+    function updateCannons(delta) {
+      for (const cannon of cannons) {
+        cannon.cooldown = Math.max(0, (cannon.cooldown || 0) - delta);
+
+        if (state.lickTarget === cannon) {
+          const playerPos = cannonToThreeVec3(player.body.position);
+          const toPlayer = playerPos.clone().sub(cannon.position);
+          toPlayer.y = 0;
+
+          if (toPlayer.lengthSq() > 0.001) {
+            const desiredYaw = Math.atan2(toPlayer.x, toPlayer.z);
+            cannon.yaw = lerpAngle(cannon.yaw || 0, desiredYaw, 0.18);
+          }
+        }
+
+        syncCannonVisual(cannon);
+
+        if (cannon.countdownTarget) {
+          updateCannonCountdown(cannon, delta);
+          continue;
+        }
+
+        if (!state.started || cannon.cooldown > 0) continue;
+
+        for (const target of getCannonLaunchTargets()) {
+          if (isTargetInsideCannon(cannon, target)) {
+            startCannonCountdown(cannon, target);
+            break;
+          }
+        }
+      }
+    }
+
+    function updateJumpPads(delta) {
+      for (const pad of jumpPads) {
+        if (!pad || pad.destroyed || !pad.body) continue;
+
+        pad.jumpPadCooldown = Math.max(0, (pad.jumpPadCooldown || 0) - delta);
+
+        const padPos = cannonToThreeVec3(pad.body.position);
+        const topY = padPos.y + pad.size.y / 2;
+
+        const targets = [
+          { obj: player, body: player.body, power: 31.0 },
+          ...gameObjects
+            .filter((obj) => obj !== pad && obj.body && !obj.destroyed && !obj.isCannon)
+            .map((obj) => ({
+              obj,
+              body: obj.body,
+              power: obj.isNPC ? 29.0 : 26.0
+            }))
+        ];
+
+        for (const target of targets) {
+          const body = target.body;
+          if (!body) continue;
+
+          body._jumpPadCooldown = Math.max(0, (body._jumpPadCooldown || 0) - delta);
+          if (body._jumpPadCooldown > 0) continue;
+
+          const pos = cannonToThreeVec3(body.position);
+          const halfHeight = getTargetHalfHeight(target);
+          const radius = getTargetHorizontalRadius(target);
+          const bodyBottomY = pos.y - halfHeight;
+          const horizontalDistance = getHorizontalDistance(pos, padPos);
+          const nearTop = bodyBottomY >= topY - 0.25 && bodyBottomY <= topY + 0.75;
+          const fallingOrStanding = body.velocity.y <= 3.2;
+          const triggerRadius = 1.55 + Math.min(radius, 1.4);
+
+          if (horizontalDistance < triggerRadius && nearTop && fallingOrStanding) {
+            body.velocity.y = target.power;
+
+            const away = pos.clone().sub(padPos);
+            away.y = 0;
+            if (away.lengthSq() > 0.001) {
+              away.normalize();
+              body.velocity.x += away.x * 3.6;
+              body.velocity.z += away.z * 3.6;
+            }
+
+            body.wakeUp();
+            body._jumpPadCooldown = 0.65;
+            pad.jumpPadCooldown = 0.2;
+
+            if (target.obj && target.obj.isNPC) {
+              target.obj.stunTimer = Math.max(target.obj.stunTimer || 0, 0.9);
+              target.obj.isWalking = false;
+            }
+
+            showMessage("ジャンプ台で大ジャンプ！");
+            break;
+          }
+        }
+      }
+    }
+
     function updateSpawnButton(delta) {
       if (!spawnButton.mesh) return;
 
@@ -1844,6 +2090,9 @@ createStaticBox(
       createStaticBox(new THREE.Vector3(62, 1.2, 0), new THREE.Vector3(4, 2.4, 10), 0x8d653d, { name: "outerWallObstacleA" });
       createStaticBox(new THREE.Vector3(-62, 1.2, -12), new THREE.Vector3(10, 2.4, 4), 0x8d653d, { name: "outerWallObstacleB" });
 
+      // 大砲ギミック
+      createCannonGimmick();
+
       // タイトル看板
       createTitleSign();
 
@@ -1974,6 +2223,155 @@ createStaticBox(
     // =========================================================
     //  物理オブジェクト生成
     // =========================================================
+
+    function createJumpPadMesh(size, color = 0x33c7ff) {
+      const group = new THREE.Group();
+
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: 0x1f2937,
+        roughness: 0.55,
+        metalness: 0.25
+      });
+
+      const membraneMat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: 0x0a3f66,
+        emissiveIntensity: 0.25,
+        roughness: 0.35,
+        metalness: 0.05
+      });
+
+      const ringMat = new THREE.MeshStandardMaterial({
+        color: 0xf4f4f4,
+        roughness: 0.42,
+        metalness: 0.4
+      });
+
+      const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(size.x * 0.46, size.x * 0.50, size.y * 0.55, 32),
+        baseMat
+      );
+      base.position.y = -size.y * 0.18;
+      group.add(base);
+
+      const membrane = new THREE.Mesh(
+        new THREE.CylinderGeometry(size.x * 0.43, size.x * 0.43, size.y * 0.18, 32),
+        membraneMat
+      );
+      membrane.position.y = size.y * 0.18;
+      group.add(membrane);
+
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(size.x * 0.43, 0.07, 10, 36),
+        ringMat
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = size.y * 0.31;
+      group.add(ring);
+
+      const legGeo = new THREE.BoxGeometry(0.12, size.y * 0.95, 0.12);
+      for (const [x, z] of [[-0.95, -0.95], [0.95, -0.95], [-0.95, 0.95], [0.95, 0.95]]) {
+        const leg = new THREE.Mesh(legGeo, baseMat);
+        leg.position.set(x, -size.y * 0.18, z);
+        leg.rotation.x = z > 0 ? 0.18 : -0.18;
+        leg.rotation.z = x > 0 ? -0.18 : 0.18;
+        group.add(leg);
+      }
+
+      const light = new THREE.PointLight(0x66ccff, 0.8, 5);
+      light.position.set(0, 0.6, 0);
+      group.add(light);
+
+      enableShadowForObject3D(group);
+      return group;
+    }
+
+    function createCannonMesh() {
+      const group = new THREE.Group();
+
+      const metalMat = new THREE.MeshStandardMaterial({
+        color: 0x262a30,
+        roughness: 0.38,
+        metalness: 0.55
+      });
+
+      const darkMat = new THREE.MeshStandardMaterial({
+        color: 0x08090a,
+        roughness: 0.7,
+        metalness: 0.2
+      });
+
+      const woodMat = new THREE.MeshStandardMaterial({
+        map: textures.wood,
+        color: 0xffffff,
+        roughness: 0.72
+      });
+
+      // 台車部分は地面に水平のまま、砲身だけを斜め上へ向けます。
+      const barrelGroup = new THREE.Group();
+      barrelGroup.position.set(0, 0.55, 0.1);
+      barrelGroup.rotation.x = -CANNON_PITCH;
+      group.add(barrelGroup);
+
+      const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.46, 0.62, 3.4, 28),
+        metalMat
+      );
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.33, 0.35);
+      barrelGroup.add(barrel);
+
+      const muzzle = new THREE.Mesh(
+        new THREE.TorusGeometry(0.48, 0.08, 10, 28),
+        darkMat
+      );
+      muzzle.position.set(0, 0.33, 2.06);
+      barrelGroup.add(muzzle);
+
+      const mouth = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.42, 0.42, 0.04, 28),
+        darkMat
+      );
+      mouth.rotation.x = Math.PI / 2;
+      mouth.position.set(0, 0.33, 2.10);
+      barrelGroup.add(mouth);
+
+      const aimMark = new THREE.Mesh(
+        new THREE.ConeGeometry(0.15, 0.45, 12),
+        new THREE.MeshStandardMaterial({ color: 0xffee55, emissive: 0x554400, emissiveIntensity: 0.35 })
+      );
+      aimMark.rotation.x = Math.PI / 2;
+      aimMark.position.set(0, 0.90, 1.95);
+      barrelGroup.add(aimMark);
+
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(1.45, 0.35, 1.45),
+        woodMat
+      );
+      base.position.set(0, 0.22, 0.05);
+      group.add(base);
+
+      const axle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 1.65, 16),
+        darkMat
+      );
+      axle.rotation.z = Math.PI / 2;
+      axle.position.set(0, 0.35, 0.1);
+      group.add(axle);
+
+      const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.18, 22);
+      const leftWheel = new THREE.Mesh(wheelGeo, woodMat);
+      leftWheel.rotation.z = Math.PI / 2;
+      leftWheel.position.set(-0.92, 0.35, 0.1);
+      group.add(leftWheel);
+
+      const rightWheel = leftWheel.clone();
+      rightWheel.position.x = 0.92;
+      group.add(rightWheel);
+
+      enableShadowForObject3D(group);
+      return group;
+    }
 
     function createCarMesh(size, color) {
       const group = new THREE.Group();
@@ -2978,6 +3376,8 @@ createStaticBox(
 
       if (visualType === "car") {
         mesh = createCarMesh(size, color);
+      } else if (visualType === "jumpPad") {
+        mesh = createJumpPadMesh(size, color);
       } else if (visualType === "houseIntact") {
         mesh = createHouseMesh(size, color);
       } else if (visualType === "dangerBox") {
@@ -3041,6 +3441,16 @@ createStaticBox(
         destroyed: false,
         lastHitTime: 0
       };
+
+      if (visualType === "jumpPad") {
+        obj.isJumpPad = true;
+        obj.jumpPadCooldown = 0;
+        obj.body.fixedRotation = true;
+        obj.body.linearDamping = 0.55;
+        obj.body.angularDamping = 0.9;
+        obj.body.updateMassProperties();
+        jumpPads.push(obj);
+      }
 
       body.userData = obj;
       gameObjects.push(obj);
@@ -3115,10 +3525,6 @@ createStaticBox(
 
       state.destroyedCount += 1;
       state.destroyedByName[obj.name] = (state.destroyedByName[obj.name] || 0) + 1;
-
-      if (obj.name !== "debris") {
-        playSound("destroy");
-      }
 
       addScore(obj.score + impactPower * 2, obj.mesh.position);
 
@@ -3347,7 +3753,6 @@ createStaticBox(
     }
 
     function explodeAt(position, power = 10, radius = 8) {
-      playSound("explosion");
       showMessage("ドカーン！");
       createExplosionEffect(position);
       screenShake(0.35, 0.45);
@@ -3871,7 +4276,6 @@ createStaticBox(
       player.body.velocity.y = 8.4;
 
       state.jumpCooldown = 0.28;
-      playSound("jump");
       // addScore(2, player.mesh.position); ←※ジャンプでスコア2加算されていたので削除
       showMessage("ジャンプ！");
     }
@@ -3899,7 +4303,6 @@ createStaticBox(
       if (state.headbuttCooldown > 0) return;
 
       state.headbuttCooldown = 0.55;
-      playSound("headbutt");
 
       const playerPos = cannonToThreeVec3(player.body.position);
       const forward = new THREE.Vector3(
@@ -4104,19 +4507,25 @@ createStaticBox(
       target._beforeLickLinearDamping = target.body.linearDamping;
       target._beforeLickAngularDamping = target.body.angularDamping;
 
-      target.body.linearDamping = 0.55;
-      target.body.angularDamping = 0.75;
-      target.body.wakeUp();
+      if (!target.isCannon) {
+        target.body.linearDamping = 0.55;
+        target.body.angularDamping = 0.75;
+        target.body.wakeUp();
+      }
 
       createLickLine();
       updateHeadbuttButtonLabel();
+
+      if (target.isCannon) {
+        showMessage("大砲の向きを変更中！");
+        return;
+      }
 
       if (target.isLegendarySword) {
         pullLegendarySwordFromStone(target);
 
         if (!state.hasLegendarySword) {
           state.hasLegendarySword = true;
-          playSound("sword");
           updateMission();
           showMessage("伝説の剣を装備中は頭突きの威力アップ！");
         } else {
@@ -4143,7 +4552,8 @@ createStaticBox(
       let bestScore = -999;
 
       for (const obj of gameObjects) {
-        if (!obj.body || obj.destroyed || obj.body.mass <= 0) continue;
+        if (!obj.body || obj.destroyed) continue;
+        if (obj.body.mass <= 0 && !obj.isCannon) continue;
         if (obj.name === "debris") continue;
 
         const objPos = cannonToThreeVec3(obj.body.position);
@@ -4261,6 +4671,28 @@ createStaticBox(
       const mouthPos = playerPos.clone()
         .add(new THREE.Vector3(0, 0.65, 0))
         .add(forward.clone().multiplyScalar(0.95));
+
+      if (obj.isCannon) {
+        const cannonPos = getCannonMouthPosition(obj);
+        const distance = mouthPos.distanceTo(cannonPos);
+
+        if (distance > 14) {
+          releaseLick();
+          showMessage("ベロが外れた！");
+          return;
+        }
+
+        const toPlayer = playerPos.clone().sub(obj.position);
+        toPlayer.y = 0;
+        if (toPlayer.lengthSq() > 0.001) {
+          const desiredYaw = Math.atan2(toPlayer.x, toPlayer.z);
+          obj.yaw = lerpAngle(obj.yaw || 0, desiredYaw, 0.22);
+        }
+
+        syncCannonVisual(obj);
+        updateLickCylinder(mouthPos, cannonPos);
+        return;
+      }
 
       const holdPos = mouthPos.clone()
         .add(forward.clone().multiplyScalar(2.6))
@@ -4470,7 +4902,6 @@ createStaticBox(
       }
 
       if (newlyCompleted.length > 0) {
-        playSound("mission");
         const totalReward = newlyCompleted.reduce((sum, mission) => sum + mission.reward, 0);
 
         if (totalReward > 0) {
@@ -4749,6 +5180,12 @@ createStaticBox(
         // NPCは専用アニメーション側で同期する
         if (obj.isNPC) continue;
 
+        // 大砲は固定Bodyだが、ベロで見た目の向きだけ変更できるため専用同期する
+        if (obj.isCannon) {
+          syncCannonVisual(obj);
+          continue;
+        }
+
         syncMeshWithBody(obj.mesh, obj.body);
 
         if (obj.visualYOffset) {
@@ -4809,6 +5246,7 @@ createStaticBox(
       createGround();
       createBoundary();
       createMapProps();
+      createJumpPads();
       createObjects();
       createNPCs();
       setupControls();
@@ -4820,7 +5258,6 @@ createStaticBox(
       window.addEventListener("resize", onResize);
 
       startButton.addEventListener("pointerdown", () => {
-        resumeAudio();
         startOverlay.style.display = "none";
         state.started = true;
 
@@ -4870,6 +5307,8 @@ createStaticBox(
         updateCamera(delta);
         updateExplosionEffects(delta);
         updateSpawnButton(delta);
+        updateJumpPads(delta);
+        updateCannons(delta);
         cleanupTooManyDebris();
 
         world.step(fixedTimeStep, delta, maxSubSteps);
