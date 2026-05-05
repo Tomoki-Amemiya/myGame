@@ -778,7 +778,7 @@
 
       // スポーンボタンの位置です。
       // 灰色高台の上面がだいたい Y=8 なので、Y=8.08 で高台に乗る高さにしています。
-      position: new THREE.Vector3(-36, 8.08, -24),
+      position: new THREE.Vector3(-48, 8.08, -36),
 
       // 押したあと再度押せるようになるまでの残り時間。秒単位です。
       cooldown: 0,
@@ -1606,23 +1606,23 @@
 
 // -----------------------------------------------------
 // 茶色の大きい高台
-// 中心: (36, 5, 28)
+// 中心: (48, 5, 40)
 // サイズ: (14, 10, 14)
 // 範囲:
-//   X: 29 ～ 43
+//   X: 41 ～ 55
 //   Y: 0 ～ 10
-//   Z: 21 ～ 35
-// 階段は Z=21 より手前側、つまり Z<21 にだけ置く
+//   Z: 33 ～ 47
+// 階段は Z=33 より手前側、つまり Z<33 にだけ置く
 // -----------------------------------------------------
 createStaticBox(
-  new THREE.Vector3(36, 5, 28),
+  new THREE.Vector3(48, 5, 40),
   new THREE.Vector3(14, 10, 14),
   0xc1a078,
   { name: "brownLargePlatform" }
 );
 
 // 茶色高台用の階段
-// 最終段の奥端が Z=20.4 までなので、高台の開始Z=21に貫通しない
+// 最終段の奥端が Z=32.4 までなので、高台の開始Z=33に貫通しない
 const brownStairs = [
   { z: -10, top: 0.60, size: [6, 1.20, 5] },
   { z: -6,  top: 1.40, size: [6, 1.20, 5] },
@@ -1644,7 +1644,7 @@ for (let i = 0; i < brownStairs.length; i++) {
   const centerY = step.top - size.y / 2;
 
   createStaticBox(
-    new THREE.Vector3(36, centerY, step.z),
+    new THREE.Vector3(48, centerY, step.z + 12),
     size,
     0xd0a878 - i * 0x030303,
     { name: `brownStair_${i + 1}` }
@@ -1653,24 +1653,24 @@ for (let i = 0; i < brownStairs.length; i++) {
 
 // -----------------------------------------------------
 // 灰色の大きい高台
-// 中心: (-36, 4, -24)
+// 中心: (-48, 4, -36)
 // サイズ: (12, 8, 12)
 // 範囲:
-//   X: -42 ～ -30
+//   X: -54 ～ -42
 //   Y: 0 ～ 8
-//   Z: -30 ～ -18
-// 階段は Z=-18 より手前側、つまり Z>-18 にだけ置く
+//   Z: -42 ～ -30
+// 階段は Z=-30 より手前側、つまり Z>-30 にだけ置く
 // -----------------------------------------------------
 createStaticBox(
-  new THREE.Vector3(-36, 4, -24),
+  new THREE.Vector3(-48, 4, -36),
   new THREE.Vector3(12, 8, 12),
   0xb7b7b7,
   { name: "grayLargePlatform" }
 );
 
 // 灰色高台用の階段
-// 最終段の奥端が Z=-17.6 付近になるようにし、
-// 高台の手前端 Z=-18 にほぼ接続するが、内部には貫通しない
+// 最終段の奥端が Z=-29.6 付近になるようにし、
+// 高台の手前端 Z=-30 にほぼ接続するが、内部には貫通しない
 const grayStairs = [
   { z: 18,   top: 0.55, size: [5.5, 1.10, 5] },
   { z: 14,   top: 1.25, size: [5.5, 1.10, 5] },
@@ -1692,7 +1692,7 @@ for (let i = 0; i < grayStairs.length; i++) {
   const centerY = step.top - size.y / 2;
 
   createStaticBox(
-    new THREE.Vector3(-36, centerY, step.z),
+    new THREE.Vector3(-48, centerY, step.z - 12),
     size,
     0xd0d0d0 - i * 0x040404,
     { name: `grayStair_${i + 1}` }
@@ -1702,14 +1702,14 @@ for (let i = 0; i < grayStairs.length; i++) {
 // 高台の上で少し遊べるように、薄い縁を追加
 // 縁も当たり判定あり。ただし低めにして邪魔になりすぎないようにする。
 createStaticBox(
-  new THREE.Vector3(36, 10.25, 34.4),
+  new THREE.Vector3(48, 10.25, 46.4),
   new THREE.Vector3(13, 0.5, 0.8),
   0x8d653d,
   { name: "brownPlatformBackEdge" }
 );
 
 createStaticBox(
-  new THREE.Vector3(-36, 8.25, -29.4),
+  new THREE.Vector3(-48, 8.25, -41.4),
   new THREE.Vector3(11, 0.5, 0.8),
   0x8a8a8a,
   { name: "grayPlatformBackEdge" }
@@ -1726,7 +1726,7 @@ createStaticBox(
       createTitleSign();
 
       // 茶色の大きい高台の上に伝説の剣を配置
-      createLegendarySword(new THREE.Vector3(36, 11.25, 28));
+      createLegendarySword(new THREE.Vector3(48, 11.25, 40));
 
       // 反対側の灰色高台の上にスポーンボタンを配置
       createSpawnButton();
@@ -2317,9 +2317,74 @@ createStaticBox(
       gameObjects.push(npc);
       npcs.push(npc);
 
+      body.addEventListener("collide", (event) => {
+        handleNPCCollision(npc, event);
+      });
+
       chooseNewNPCTarget(npc);
 
       return npc;
+    }
+
+    function handleNPCCollision(npc, event) {
+      if (!npc || npc.destroyed || !npc.body) return;
+      if (!state.started || state.startProtectionTimer > 0) return;
+
+      const otherBody = event.body;
+      const otherObj = otherBody ? otherBody.userData : null;
+
+      const hitByPlayer = otherBody === player.body;
+      const hitByLickedObject = !!(
+        state.lickTarget &&
+        state.lickTarget.body &&
+        otherBody === state.lickTarget.body
+      );
+
+      // 自キャラ、またはベロで掴んで振り回している物が当たった時だけ、
+      // NPCの自律移動を一時停止して物理衝突の勢いを残す。
+      if (!hitByPlayer && !hitByLickedObject) return;
+
+      const relativeVelocity = Math.abs(event.contact.getImpactVelocityAlongNormal());
+      const otherSpeed = otherBody && otherBody.velocity
+        ? Math.hypot(otherBody.velocity.x, otherBody.velocity.y, otherBody.velocity.z)
+        : 0;
+      const impact = Math.max(relativeVelocity, otherSpeed * 0.55);
+
+      // 低速で軽く触れただけの場合は少し押される程度にする。
+      if (impact < 1.2) return;
+
+      const npcPos = cannonToThreeVec3(npc.body.position);
+      const otherPos = otherBody
+        ? cannonToThreeVec3(otherBody.position)
+        : npcPos.clone().add(new THREE.Vector3(-1, 0, 0));
+
+      const away = npcPos.clone().sub(otherPos);
+      away.y = 0;
+      if (away.lengthSq() < 0.0001) {
+        away.set(Math.sin(player.visualYaw), 0, Math.cos(player.visualYaw));
+      }
+      away.normalize();
+
+      const heldObjectMassBonus = hitByLickedObject
+        ? clamp((state.lickTarget.body.mass || 1) / 3, 0.8, 2.4)
+        : 1;
+
+      const npcTypeBonus = npc.npcType === "dog" ? 1.12 : 1.0;
+      const impulsePower = clamp(impact * 1.9 * heldObjectMassBonus * npcTypeBonus, 2.2, 24);
+      const upwardPower = clamp(impact * 0.75, 0.7, 8.5);
+
+      npc.stunTimer = clamp(0.45 + impact * 0.16, 0.5, 2.4);
+      npc.isWalking = false;
+      npc.body.wakeUp();
+
+      npc.body.applyImpulse(
+        new CANNON.Vec3(
+          away.x * impulsePower,
+          upwardPower,
+          away.z * impulsePower
+        ),
+        npc.body.position
+      );
     }
 
     function chooseNewNPCTarget(npc) {
@@ -2588,6 +2653,17 @@ createStaticBox(
     // HOUSE_PART_HP_MULTIPLIER を上げるほど、崩れた後の壁・屋根パーツが壊れにくくなります。
     const HOUSE_COLLAPSE_IMPACT_THRESHOLD = 68;
     const HOUSE_PART_HP_MULTIPLIER = 10;
+
+    // 車オブジェクトの調整値です。
+    // 頭突き1回で壊れないよう、頭突きダメージは固定寄りにし、
+    // 頭突き後の地面・壁への衝突ダメージは控えめに制限します。
+    const CAR_HEADBUTT_DAMAGE = 150;
+    const CAR_HEADBUTT_DAMAGE_LEGENDARY = 260;
+    const CAR_COLLISION_DAMAGE_THRESHOLD = 18;
+    const CAR_COLLISION_DAMAGE_MULTIPLIER = 0.12;
+    const CAR_COLLISION_DAMAGE_CAP = 45;
+    const CAR_HEADBUTT_FORWARD_MULTIPLIER = 1.45;
+    const CAR_HEADBUTT_UPWARD_IMPULSE = 1.2;
 
     // 家の見た目を作る関数です。
     // 初回衝撃まではこのGroupのまま家の形を維持し、衝撃後に壁・屋根パーツへ分解します。
@@ -2887,9 +2963,21 @@ createStaticBox(
         return;
       }
 
-      if (impact > 9) {
+      const isCar = obj.visualType === "car";
+      const damageThreshold = isCar ? CAR_COLLISION_DAMAGE_THRESHOLD : 9;
 
-        obj.hp -= impact * 0.7;
+      if (impact > damageThreshold) {
+        let collisionDamage = isCar
+          ? impact * CAR_COLLISION_DAMAGE_MULTIPLIER
+          : impact * 0.7;
+
+        // 車は頭突き後に地面や壁へ当たった追加衝撃だけで即破壊されないよう、
+        // 衝突1回あたりの削り量に上限をかける。
+        if (isCar) {
+          collisionDamage = Math.min(collisionDamage, CAR_COLLISION_DAMAGE_CAP);
+        }
+
+        obj.hp -= collisionDamage;
 
         // 衝突しただけではスコア加算しない。
         // スコアは破壊時の destroyObject 側でのみ加算する。
@@ -2980,7 +3068,7 @@ createStaticBox(
           size: new THREE.Vector3(2.8, 1.0, 4.5),
           color: [0xff5544, 0x4477ff, 0xffff66, 0x66ff99, 0xffffff][i % 5],
           mass: 5,
-          // 車は頭突き10回前後で壊れる程度に耐久力を上げる
+          // 車は通常の頭突き5回前後で壊れる程度にする
           hp: 720,
           score: 220,
           name: "車っぽい物体",
@@ -3745,12 +3833,25 @@ createStaticBox(
         }
 
           const effectiveImpulsePower = impulsePower * legendaryPowerMultiplier;
+          const isCar = obj.visualType === "car";
+          const forwardImpulsePower = isCar
+            ? effectiveImpulsePower * CAR_HEADBUTT_FORWARD_MULTIPLIER
+            : effectiveImpulsePower;
+          const upwardImpulsePower = isCar
+            ? CAR_HEADBUTT_UPWARD_IMPULSE * (hasLegendarySwordPower ? 1.4 : 1)
+            : (4.5 + impulsePower * 0.18) * (hasLegendarySwordPower ? 1.35 : 1);
+
+          // 車は頭突き時に真上へ跳ねやすかったため、上方向の速度を抑えてから
+          // 前方向の吹き飛ばしを強めに入れる。
+          if (isCar) {
+            obj.body.velocity.y = Math.min(obj.body.velocity.y, 1.2);
+          }
 
           obj.body.applyImpulse(
             new CANNON.Vec3(
-              forward.x * effectiveImpulsePower,
-              (4.5 + impulsePower * 0.18) * (hasLegendarySwordPower ? 1.35 : 1),
-              forward.z * effectiveImpulsePower
+              forward.x * forwardImpulsePower,
+              upwardImpulsePower,
+              forward.z * forwardImpulsePower
             ),
             obj.body.position
           );
@@ -3762,7 +3863,11 @@ createStaticBox(
                 continue;
               }
 
-              obj.hp -= impulsePower * 3.0;
+              const headbuttDamage = isCar
+                ? (hasLegendarySwordPower ? CAR_HEADBUTT_DAMAGE_LEGENDARY : CAR_HEADBUTT_DAMAGE)
+                : impulsePower * 3.0;
+
+              obj.hp -= headbuttDamage;
               if (obj.hp <= 0) {
                 destroyObject(obj, impulsePower);
               }
