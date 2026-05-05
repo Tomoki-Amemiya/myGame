@@ -550,7 +550,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
-      <div id="versionText">Ver.1.2.7</div>
+      <div id="versionText">Ver.1.2.8</div>
     </div>
   </div>
 
@@ -5109,6 +5109,14 @@ createStaticBox(
         } else {
           showMessage("伝説の剣をベロで掴んだ！");
         }
+        return;
+      }
+
+      if (target.isNPC && target.npcType === "rabbit" && !target.rabbitCapturedOnce) {
+        target.rabbitCapturedOnce = true;
+        state.rabbitCaptureCount += 1;
+        updateMission();
+        showMessage("ウサギをつかんだ！");
         return;
       }
 
