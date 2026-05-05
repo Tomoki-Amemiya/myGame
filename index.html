@@ -181,6 +181,12 @@
       border-color: rgba(120, 255, 160, 0.45);
     }
 
+    .missionItem.secretMission {
+      background: linear-gradient(135deg, rgba(120, 70, 220, 0.22), rgba(255, 210, 80, 0.16));
+      border-color: rgba(255, 230, 120, 0.55);
+      box-shadow: 0 0 18px rgba(255, 230, 120, 0.18);
+    }
+
     .missionMark {
       font-size: 22px;
       line-height: 1.2;
@@ -260,6 +266,19 @@
       margin-top: 4px;
       font-size: 13px;
       opacity: 0.9;
+    }
+
+    #missionClearToast.secretMissionToast {
+      background: linear-gradient(135deg, rgba(155, 92, 255, 0.98), rgba(255, 230, 92, 0.98), rgba(255, 92, 160, 0.98));
+      color: #180022;
+      box-shadow: 0 0 28px rgba(255, 235, 110, 0.8), 0 14px 50px rgba(0, 0, 0, 0.45);
+      animation: secretToastPop 0.65s ease-out;
+    }
+
+    @keyframes secretToastPop {
+      0% { transform: translateX(-50%) scale(0.7) rotate(-3deg); }
+      55% { transform: translateX(-50%) scale(1.08) rotate(2deg); }
+      100% { transform: translateX(-50%) scale(1) rotate(0); }
     }
 
     #controls {
@@ -531,7 +550,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
-      <div id="versionText">Ver.1.2.1</div>
+      <div id="versionText">Ver.1.2.2</div>
     </div>
   </div>
 
@@ -724,6 +743,13 @@
       missionCompleted: false,
       hasLegendarySword: false,
 
+      // 追加ギミック/隠しミッション用のカウントです。
+      jumpPadLaunchCount: 0,
+      cannonLaunchCount: 0,
+      legendaryPowerHeadbuttCount: 0,
+      cannonLaunchByName: {},
+      legendaryPowerHeadbuttByName: {},
+
       // 画面中央メッセージの表示残り時間。秒単位です。
       messageTimer: 0
     };
@@ -807,6 +833,10 @@
       return min + Math.random() * (max - min);
     }
 
+    function incrementCounterMap(map, key, amount = 1) {
+      map[key] = (map[key] || 0) + amount;
+    }
+
     function showMessage(text) {
       messageEl.textContent = text;
       messageEl.classList.add("show");
@@ -820,6 +850,7 @@
         ? `MISSION CLEAR x${count}`
         : `MISSION CLEAR`;
 
+      missionClearToastEl.classList.remove("secretMissionToast");
       missionClearToastEl.innerHTML = `
         <div>${titleText}</div>
         <div>${title}</div>
@@ -831,6 +862,28 @@
       setTimeout(() => {
         missionClearToastEl.classList.remove("show");
       }, 2600);
+    }
+
+    function showSecretMissionClearToast(title, reward, count = 1) {
+      if (!missionClearToastEl) return;
+
+      const titleText = count > 1
+        ? `SECRET MISSION CLEAR x${count}`
+        : `SECRET MISSION CLEAR`;
+
+      missionClearToastEl.innerHTML = `
+        <div>㊙ ${titleText} ㊙</div>
+        <div>${title}</div>
+        <div class="small">隠しミッション達成！ 追加報酬 +${reward}</div>
+      `;
+
+      missionClearToastEl.classList.add("secretMissionToast");
+      missionClearToastEl.classList.add("show");
+
+      setTimeout(() => {
+        missionClearToastEl.classList.remove("show");
+        missionClearToastEl.classList.remove("secretMissionToast");
+      }, 3400);
     }
 
     function updateMessage(delta) {
@@ -1356,14 +1409,100 @@
       return texture;
     }
 
-    function createTitleSign() {
-      // 当たり判定用の柱と看板本体は createStaticBox で維持する
-      createStaticBox(new THREE.Vector3(4, 2, 22), new THREE.Vector3(0.5, 4, 0.5), 0x2b2114, { name: "titleSignPole" });
-      // 柱が文字に重なりにくいよう、看板本体を少し上へ移動
-      createStaticBox(new THREE.Vector3(4, 4.85, 22), new THREE.Vector3(5, 2, 0.4), 0xffda4f, { name: "titleSignBoard" });
+    function createTitleSignDamageMarks(stage) {
+      const group = new THREE.Group();
+      group.visible = false;
 
-      // 表示用テキスト面。薄い板の前面に少しだけ浮かせて貼る。
+      const crackMat = new THREE.MeshBasicMaterial({
+        color: stage === 1 ? 0x5c3a12 : 0x1f1407,
+        transparent: true,
+        opacity: stage === 1 ? 0.62 : 0.9,
+        side: THREE.DoubleSide
+      });
+
+      const stainMat = new THREE.MeshBasicMaterial({
+        color: stage === 1 ? 0x7a4a19 : 0x2b1a09,
+        transparent: true,
+        opacity: stage === 1 ? 0.18 : 0.34,
+        side: THREE.DoubleSide
+      });
+
+      function addCrack(x, y, length, angle, width = 0.035) {
+        const crack = new THREE.Mesh(new THREE.PlaneGeometry(width, length), crackMat);
+        crack.position.set(x, y, -0.245 - stage * 0.003);
+        crack.rotation.z = angle;
+        group.add(crack);
+      }
+
+      function addStain(x, y, w, h, angle = 0) {
+        const stain = new THREE.Mesh(new THREE.PlaneGeometry(w, h), stainMat);
+        stain.position.set(x, y, -0.247 - stage * 0.003);
+        stain.rotation.z = angle;
+        group.add(stain);
+      }
+
+      if (stage === 1) {
+        addCrack(-1.75, 0.62, 0.85, 0.9);
+        addCrack(-1.48, 0.35, 0.45, -0.75);
+        addCrack(1.55, -0.48, 0.8, -0.65);
+        addCrack(1.25, -0.22, 0.42, 0.8);
+        addStain(-1.9, -0.55, 0.75, 0.28, 0.22);
+        addStain(1.8, 0.55, 0.65, 0.25, -0.18);
+      } else {
+        addCrack(-2.05, 0.15, 1.35, 0.3, 0.045);
+        addCrack(-1.55, -0.08, 0.72, -0.9, 0.04);
+        addCrack(-0.35, 0.75, 1.05, -0.55, 0.045);
+        addCrack(0.15, 0.42, 0.62, 0.95, 0.04);
+        addCrack(1.65, 0.1, 1.2, 0.82, 0.045);
+        addCrack(1.95, -0.38, 0.66, -0.55, 0.04);
+        addStain(-1.75, 0.55, 1.05, 0.38, -0.12);
+        addStain(0.15, -0.55, 1.35, 0.42, 0.18);
+        addStain(1.75, -0.5, 0.95, 0.34, -0.25);
+      }
+
+      return group;
+    }
+
+    function createTitleSign() {
+      // ゲームタイトル看板は、黄色い看板部分と茶色い柱をまとめて1つの高HP破壊可能オブジェクトにする。
+      // これにより、地面付近で茶色い柱に頭突きした場合も、看板オブジェクトへのヒットとして扱える。
       const titleTexture = createTitleTexture();
+      const group = new THREE.Group();
+
+      const boardSize = new THREE.Vector3(5, 2, 0.4);
+      const poleSize = new THREE.Vector3(0.5, 4, 0.5);
+      const groupBasePosition = new THREE.Vector3(4, 2.5, 22);
+      const boardLocalPosition = new THREE.Vector3(0, 2.35, 0);
+      const poleLocalPosition = new THREE.Vector3(0, -0.5, 0);
+
+      const pole = new THREE.Mesh(
+        new THREE.BoxGeometry(poleSize.x, poleSize.y, poleSize.z),
+        new THREE.MeshStandardMaterial({
+          map: textures.wood,
+          color: 0x2b2114,
+          roughness: 0.82,
+          metalness: 0.02
+        })
+      );
+      pole.position.copy(poleLocalPosition);
+      pole.castShadow = true;
+      pole.receiveShadow = true;
+      group.add(pole);
+
+      const board = new THREE.Mesh(
+        new THREE.BoxGeometry(boardSize.x, boardSize.y, boardSize.z),
+        new THREE.MeshStandardMaterial({
+          color: 0xffda4f,
+          roughness: 0.78,
+          metalness: 0.02
+        })
+      );
+      board.position.copy(boardLocalPosition);
+      board.castShadow = true;
+      board.receiveShadow = true;
+      group.add(board);
+
+      // 表示用テキスト面。看板本体の前面に少しだけ浮かせて貼る。
       const titlePlane = new THREE.Mesh(
         new THREE.PlaneGeometry(4.65, 1.65),
         new THREE.MeshBasicMaterial({
@@ -1372,13 +1511,178 @@
           side: THREE.FrontSide
         })
       );
-
-      titlePlane.position.set(4, 4.85, 21.76);
+      titlePlane.position.set(boardLocalPosition.x, boardLocalPosition.y, -0.23);
       // PlaneGeometryの表面をプレイヤー側(-Z方向)へ向け、文字の左右反転を防ぐ
       titlePlane.rotation.y = Math.PI;
       titlePlane.castShadow = false;
       titlePlane.receiveShadow = false;
-      scene.add(titlePlane);
+      group.add(titlePlane);
+
+      const damage50 = createTitleSignDamageMarks(1);
+      damage50.position.copy(boardLocalPosition);
+      group.add(damage50);
+
+      const damage20 = createTitleSignDamageMarks(2);
+      damage20.position.copy(boardLocalPosition);
+      group.add(damage20);
+
+      group.position.copy(groupBasePosition);
+      enableShadowForObject3D(group);
+      scene.add(group);
+
+      const body = new CANNON.Body({
+        mass: 0,
+        type: CANNON.Body.STATIC,
+        material: defaultMaterial
+      });
+      body.addShape(
+        new CANNON.Box(new CANNON.Vec3(boardSize.x / 2, boardSize.y / 2, boardSize.z / 2)),
+        new CANNON.Vec3(boardLocalPosition.x, boardLocalPosition.y, boardLocalPosition.z)
+      );
+      body.addShape(
+        new CANNON.Box(new CANNON.Vec3(poleSize.x / 2, poleSize.y / 2, poleSize.z / 2)),
+        new CANNON.Vec3(poleLocalPosition.x, poleLocalPosition.y, poleLocalPosition.z)
+      );
+      body.position.set(groupBasePosition.x, groupBasePosition.y, groupBasePosition.z);
+      body.allowSleep = true;
+      body.sleepSpeedLimit = 0.08;
+      body.sleepTimeLimit = 0.8;
+      world.addBody(body);
+      body.updateMassProperties();
+      body.updateAABB();
+
+      const titleSign = {
+        mesh: group,
+        body,
+        size: new THREE.Vector3(5, 5, 0.6),
+        hp: 5000,
+        maxHp: 5000,
+        score: 1000,
+        name: "ゲームタイトル看板",
+        breakable: true,
+        visualType: "titleSignBoard",
+        colorHex: 0xffda4f,
+        destroyed: false,
+        lastHitTime: 0,
+        hitShakeTimer: 0,
+        damageStage: 0,
+        titleSignParts: {
+          board,
+          pole,
+          titlePlane,
+          damage50,
+          damage20
+        }
+      };
+
+      body.userData = titleSign;
+      gameObjects.push(titleSign);
+      destructibles.push(titleSign);
+
+      body.addEventListener("collide", (event) => {
+        handleObjectCollision(titleSign, event);
+      });
+
+      return titleSign;
+    }
+
+    function spawnTitleSignHitDebris(obj, count = 4) {
+      if (!obj || !obj.mesh) return;
+
+      const basePos = obj.mesh.position.clone();
+      const boardWorldY = basePos.y + 2.35;
+      const debrisColor = obj.hp <= obj.maxHp * 0.2 ? 0x5b3410 : 0xc08a18;
+
+      for (let i = 0; i < count; i++) {
+        const s = rand(0.12, 0.28);
+        const piece = createDynamicBox({
+          position: new THREE.Vector3(
+            basePos.x + rand(-2.1, 2.1),
+            boardWorldY + rand(-0.8, 0.8),
+            basePos.z + rand(-0.3, -0.75)
+          ),
+          size: new THREE.Vector3(s, rand(0.08, 0.18), s),
+          color: debrisColor,
+          mass: 0.12,
+          hp: 9999,
+          score: 0,
+          name: "看板の破片",
+          breakable: false
+        });
+
+        piece.body.velocity.set(rand(-2.2, 2.2), rand(1.8, 4.2), rand(-3.0, -1.0));
+        piece.body.angularVelocity.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+
+        setTimeout(() => {
+          if (piece.mesh.parent) scene.remove(piece.mesh);
+          if (piece.body.world) world.removeBody(piece.body);
+
+          const pIdx = gameObjects.indexOf(piece);
+          if (pIdx >= 0) gameObjects.splice(pIdx, 1);
+        }, 4200);
+      }
+    }
+
+    function registerTitleSignHeadbutt(obj) {
+      if (!obj || obj.visualType !== "titleSignBoard") return;
+
+      obj.hitShakeTimer = 0.32;
+      obj.lastHitTime = clock.elapsedTime;
+      spawnTitleSignHitDebris(obj, obj.hp <= obj.maxHp * 0.2 ? 6 : 4);
+    }
+
+    function updateTitleSignVisual(obj, delta) {
+      if (!obj || obj.visualType !== "titleSignBoard" || !obj.titleSignParts) return;
+
+      const ratio = obj.maxHp > 0 ? obj.hp / obj.maxHp : 0;
+      const parts = obj.titleSignParts;
+
+      if (ratio <= 0.2) {
+        obj.damageStage = 2;
+      } else if (ratio <= 0.5) {
+        obj.damageStage = 1;
+      } else {
+        obj.damageStage = 0;
+      }
+
+      parts.damage50.visible = obj.damageStage >= 1;
+      parts.damage20.visible = obj.damageStage >= 2;
+
+      if (parts.board && parts.board.material) {
+        if (obj.damageStage >= 2) {
+          parts.board.material.color.setHex(0x9c6e25);
+          parts.board.material.roughness = 0.96;
+        } else if (obj.damageStage >= 1) {
+          parts.board.material.color.setHex(0xd5aa34);
+          parts.board.material.roughness = 0.9;
+        } else {
+          parts.board.material.color.setHex(0xffda4f);
+          parts.board.material.roughness = 0.78;
+        }
+      }
+
+      if (parts.pole && parts.pole.material) {
+        if (obj.damageStage >= 2) {
+          parts.pole.material.color.setHex(0x3a220c);
+        } else if (obj.damageStage >= 1) {
+          parts.pole.material.color.setHex(0x4c2f12);
+        } else {
+          parts.pole.material.color.setHex(0x2b2114);
+        }
+      }
+
+      obj.hitShakeTimer = Math.max(0, (obj.hitShakeTimer || 0) - delta);
+      if (obj.hitShakeTimer > 0) {
+        const t = clock.elapsedTime * 42;
+        const amp = obj.hitShakeTimer / 0.32;
+        obj.mesh.position.x += Math.sin(t) * 0.08 * amp;
+        obj.mesh.position.z += Math.cos(t * 0.83) * 0.05 * amp;
+        obj.mesh.rotation.z = Math.sin(t * 0.72) * 0.045 * amp;
+        obj.mesh.rotation.x = Math.cos(t * 0.64) * 0.018 * amp;
+      } else {
+        obj.mesh.rotation.x *= 0.82;
+        obj.mesh.rotation.z *= 0.82;
+      }
     }
 
 
@@ -1445,7 +1749,7 @@
           size: new THREE.Vector3(rand(0.9, 1.7), rand(0.9, 1.7), rand(0.9, 1.7)),
           color: [0xc98b43, 0x7cc0ff, 0xffd36b, 0xff8aad, 0xb493ff][Math.floor(rand(0, 5))],
           mass: rand(0.8, 2.3),
-          hp: rand(35, 75),
+          hp: rand(50, 100),
           score: 50,
           name: "箱",
           breakable: true
@@ -1458,7 +1762,7 @@
           color: 0xffee55,
           mass: 1.2,
           hp: 45,
-          score: 80,
+          score: 50,
           name: "板",
           breakable: true
         });
@@ -1469,8 +1773,8 @@
           size: new THREE.Vector3(2.8, 1.0, 4.5),
           color: [0xff5544, 0x4477ff, 0xffff66, 0x66ff99, 0xffffff][Math.floor(rand(0, 5))],
           mass: 5,
-          hp: 720,
-          score: 220,
+          hp: 750,
+          score: 200,
           name: "車っぽい物体",
           breakable: true,
           visualType: "car"
@@ -1483,7 +1787,7 @@
           color: 0xff2222,
           mass: 2,
           hp: 450,
-          score: 180,
+          score: 150,
           name: "あやしい赤箱",
           breakable: true,
           visualType: "dangerBox"
@@ -1499,7 +1803,7 @@
           color: [0xf2d19b, 0xe8c188, 0xf5d9a8][Math.floor(rand(0, 3))],
           mass: 12,
           hp: 900,
-          score: 320,
+          score: 200,
           name: "家",
           breakable: true,
           visualType: "houseIntact"
@@ -1794,6 +2098,16 @@
         target.body.angularVelocity.set(rand(-3, 3), rand(-6, 6), rand(-3, 3));
         target.body.wakeUp();
 
+        if (target.isPlayer) {
+          state.cannonLaunchCount += 1;
+        }
+
+        if (target.obj && target.obj.isNPC) {
+          incrementCounterMap(state.cannonLaunchByName, target.obj.name || target.name);
+        }
+
+        updateMission();
+
         if (target.obj && target.obj.isNPC) {
           target.obj.stunTimer = 2.8;
           target.obj.isWalking = false;
@@ -1850,7 +2164,7 @@
         const topY = padPos.y + pad.size.y / 2;
 
         const targets = [
-          { obj: player, body: player.body, power: 31.0 },
+          { obj: player, body: player.body, power: 31.0, isPlayer: true },
           ...gameObjects
             .filter((obj) => obj !== pad && obj.body && !obj.destroyed && !obj.isCannon)
             .map((obj) => ({
@@ -1890,6 +2204,11 @@
             body.wakeUp();
             body._jumpPadCooldown = 0.65;
             pad.jumpPadCooldown = 0.2;
+
+            if (target.isPlayer) {
+              state.jumpPadLaunchCount += 1;
+              updateMission();
+            }
 
             if (target.obj && target.obj.isNPC) {
               target.obj.stunTimer = Math.max(target.obj.stunTimer || 0, 0.9);
@@ -4314,11 +4633,17 @@ createStaticBox(
       // 伝説の剣をベロで保持している間だけ、頭突きの吹き飛ばし力を大幅強化
       const hasLegendarySwordPower = !!(state.lickTarget && state.lickTarget.isLegendarySword);
       const legendaryPowerMultiplier = hasLegendarySwordPower ? 5 : 1;
+      let legendaryMissionChanged = false;
+
+      if (hasLegendarySwordPower) {
+        state.legendaryPowerHeadbuttCount += 1;
+        legendaryMissionChanged = true;
+      }
 
       let hitSomething = false;
 
       for (const obj of [...gameObjects]) {
-        if (!obj.body || obj.destroyed || obj.body.mass <= 0) continue;
+        if (!obj.body || obj.destroyed || (obj.body.mass <= 0 && !obj.breakable)) continue;
 
         // ベロで掴んでいるオブジェクトは、頭突きでは壊さない・吹き飛ばさない
         if (state.lickTarget === obj) continue;
@@ -4346,6 +4671,11 @@ createStaticBox(
 
           obj.stunTimer = 2.0;
           obj.isWalking = false;
+
+          if (hasLegendarySwordPower) {
+            incrementCounterMap(state.legendaryPowerHeadbuttByName, obj.name || (obj.npcType === "dog" ? "犬" : "人"));
+            legendaryMissionChanged = true;
+          }
 
           obj.body.wakeUp();
           obj.body.velocity.set(0, 0, 0);
@@ -4400,6 +4730,9 @@ createStaticBox(
                 : impulsePower * 3.0;
 
               obj.hp -= headbuttDamage;
+              if (obj.visualType === "titleSignBoard") {
+                registerTitleSignHeadbutt(obj);
+              }
               if (obj.hp <= 0) {
                 destroyObject(obj, impulsePower);
               }
@@ -4424,6 +4757,10 @@ createStaticBox(
         }
       } else {
         showMessage("スカッ");
+      }
+
+      if (legendaryMissionChanged) {
+        updateMission();
       }
     }
 
@@ -4874,6 +5211,22 @@ createStaticBox(
         check: () => state.score >= 30000
       },
       {
+        id: "jumpPadOnce",
+        title: "ぴょんと一発",
+        desc: "ジャンプ台で1回飛ぶ",
+        reward: 250,
+        progressText: () => `${state.jumpPadLaunchCount}/1`,
+        check: () => state.jumpPadLaunchCount >= 1
+      },
+      {
+        id: "cannonOnce",
+        title: "大砲デビュー",
+        desc: "大砲で1回ぶっ飛ぶ",
+        reward: 250,
+        progressText: () => `${state.cannonLaunchCount}/1`,
+        check: () => state.cannonLaunchCount >= 1
+      },
+      {
         id: "getLegendarySword",
         title: "伝説の剣",
         desc: "伝説の剣を手に入れる",
@@ -4882,12 +5235,74 @@ createStaticBox(
         check: () => state.hasLegendarySword
       },
       {
+        id: "legendaryHeadbuttOnce",
+        title: "伝説の一撃",
+        desc: "伝説の剣をベロで掴んだ状態で1回頭突きする",
+        reward: 500,
+        progressText: () => `${state.legendaryPowerHeadbuttCount}/1`,
+        check: () => state.legendaryPowerHeadbuttCount >= 1
+      },
+      {
         id: "score50000",
         title: "破壊神",
         desc: "スコアを50000点以上にする",
         reward: 5000,
         progressText: () => `${state.score}/50000`,
         check: () => state.score >= 50000
+      },
+      {
+        id: "secretCannonHuman5",
+        title: "人間大砲の達人",
+        desc: "大砲で人を5回発射する",
+        reward: 1500,
+        hidden: true,
+        progressText: () => `${state.cannonLaunchByName["人"] || 0}/5`,
+        check: () => (state.cannonLaunchByName["人"] || 0) >= 5
+      },
+      {
+        id: "secretCannonDog5",
+        title: "犬も空を飛ぶ",
+        desc: "大砲で犬を5回発射する",
+        reward: 1500,
+        hidden: true,
+        progressText: () => `${state.cannonLaunchByName["犬"] || 0}/5`,
+        check: () => (state.cannonLaunchByName["犬"] || 0) >= 5
+      },
+      {
+        id: "secretLegendaryHuman5",
+        title: "対人伝説ヘッド",
+        desc: "伝説の剣パワー頭突きを人に5回当てる",
+        reward: 1800,
+        hidden: true,
+        progressText: () => `${state.legendaryPowerHeadbuttByName["人"] || 0}/5`,
+        check: () => (state.legendaryPowerHeadbuttByName["人"] || 0) >= 5
+      },
+      {
+        id: "secretLegendaryDog5",
+        title: "ワンちゃん伝説ヘッド",
+        desc: "伝説の剣パワー頭突きを犬に5回当てる",
+        reward: 1800,
+        hidden: true,
+        progressText: () => `${state.legendaryPowerHeadbuttByName["犬"] || 0}/5`,
+        check: () => (state.legendaryPowerHeadbuttByName["犬"] || 0) >= 5
+      },
+      {
+        id: "secretDestroyTitleSign",
+        title: "看板まで壊すヤギ",
+        desc: "ゲームタイトルが書かれた看板を破壊する",
+        reward: 3000,
+        hidden: true,
+        progressText: () => `${state.destroyedByName["ゲームタイトル看板"] || 0}/1`,
+        check: () => (state.destroyedByName["ゲームタイトル看板"] || 0) >= 1
+      },
+      {
+        id: "score100000",
+        title: "伝説になったヤギ",
+        desc: "スコアを100000点以上にする",
+        reward: 10000,
+        hidden: true,
+        progressText: () => `${state.score}/100000`,
+        check: () => state.score >= 100000
       }
     ];
 
@@ -4903,21 +5318,29 @@ createStaticBox(
 
       if (newlyCompleted.length > 0) {
         const totalReward = newlyCompleted.reduce((sum, mission) => sum + mission.reward, 0);
+        const secretCompleted = newlyCompleted.filter((mission) => mission.hidden);
+        const normalCompleted = newlyCompleted.filter((mission) => !mission.hidden);
 
         if (totalReward > 0) {
           addScore(totalReward, player.mesh.position, { skipMissionUpdate: true });
         }
 
-        if (newlyCompleted.length === 1) {
-          showMissionClearToast(newlyCompleted[0].title, newlyCompleted[0].reward, 1);
-          showMessage(`MISSION CLEAR：${newlyCompleted[0].title} +${newlyCompleted[0].reward}`);
+        if (secretCompleted.length > 0) {
+          const secretReward = secretCompleted.reduce((sum, mission) => sum + mission.reward, 0);
+          const secretTitle = secretCompleted.length === 1 ? secretCompleted[0].title : "複数の隠しミッション";
+          showSecretMissionClearToast(secretTitle, secretReward, secretCompleted.length);
+          showMessage(`㊙ SECRET MISSION CLEAR：${secretTitle} +${secretReward}`);
+          screenShake(0.55, 0.75);
+        } else if (normalCompleted.length === 1) {
+          showMissionClearToast(normalCompleted[0].title, normalCompleted[0].reward, 1);
+          showMessage(`MISSION CLEAR：${normalCompleted[0].title} +${normalCompleted[0].reward}`);
         } else {
           showMissionClearToast("複数ミッション達成", totalReward, newlyCompleted.length);
           showMessage(`MISSION CLEAR x${newlyCompleted.length} +${totalReward}`);
         }
       }
 
-      const nextMission = missions.find((mission) => !mission.completed);
+      const nextMission = missions.find((mission) => !mission.completed && !mission.hidden);
 
       if (nextMission) {
         missionTextEl.textContent = `${nextMission.title}：${nextMission.progressText()}`;
@@ -4934,18 +5357,20 @@ createStaticBox(
       missionListEl.innerHTML = "";
 
       for (const mission of missions) {
+        if (mission.hidden && !mission.completed) continue;
+
         const item = document.createElement("div");
-        item.className = `missionItem${mission.completed ? " completed" : ""}`;
+        item.className = `missionItem${mission.completed ? " completed" : ""}${mission.hidden ? " secretMission" : ""}`;
 
         const mark = document.createElement("div");
         mark.className = "missionMark";
-        mark.textContent = mission.completed ? "✅" : "⬜";
+        mark.textContent = mission.hidden ? "㊙" : (mission.completed ? "✅" : "⬜");
 
         const body = document.createElement("div");
 
         const name = document.createElement("div");
         name.className = "missionName";
-        name.textContent = mission.title;
+        name.textContent = mission.hidden ? `㊙ 隠しミッション：${mission.title}` : mission.title;
 
         const desc = document.createElement("div");
         desc.className = "missionDesc";
@@ -5190,6 +5615,10 @@ createStaticBox(
 
         if (obj.visualYOffset) {
           obj.mesh.position.y += obj.visualYOffset;
+        }
+
+        if (obj.visualType === "titleSignBoard") {
+          updateTitleSignVisual(obj, delta);
         }
 
         if (obj.isLegendarySword && obj.mesh.userData) {
