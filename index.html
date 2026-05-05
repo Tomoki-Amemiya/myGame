@@ -531,7 +531,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
-      <div id="versionText">Ver.1.1.19</div>
+      <div id="versionText">Ver.1.1.20</div>
     </div>
   </div>
 
@@ -797,6 +797,128 @@
 
     function rand(min, max) {
       return min + Math.random() * (max - min);
+    }
+
+
+    // =========================================================
+    //  効果音
+    // =========================================================
+    // 外部音声ファイルを使わず、Web Audio APIで短い効果音を生成します。
+    // ブラウザ仕様上、STARTボタンなどのユーザー操作後に音が有効になります。
+    let audioContext = null;
+
+    function getAudioContext() {
+      if (!audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return null;
+        audioContext = new AudioContextClass();
+      }
+      return audioContext;
+    }
+
+    function resumeAudio() {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume();
+      }
+    }
+
+    function createGainNode(ctx, volume, startTime, endTime) {
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), startTime + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+      gain.connect(ctx.destination);
+      return gain;
+    }
+
+    function playTone({ frequency = 440, endFrequency = null, duration = 0.16, type = "sine", volume = 0.18, delay = 0 }) {
+      const ctx = getAudioContext();
+      if (!ctx || ctx.state !== "running") return;
+
+      const now = ctx.currentTime + delay;
+      const end = now + duration;
+      const osc = ctx.createOscillator();
+      const gain = createGainNode(ctx, volume, now, end);
+
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, now);
+      if (endFrequency !== null) {
+        osc.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), end);
+      }
+
+      osc.connect(gain);
+      osc.start(now);
+      osc.stop(end + 0.02);
+    }
+
+    function playNoise({ duration = 0.18, volume = 0.18, delay = 0, filterFrequency = 900, filterType = "bandpass" }) {
+      const ctx = getAudioContext();
+      if (!ctx || ctx.state !== "running") return;
+
+      const now = ctx.currentTime + delay;
+      const end = now + duration;
+      const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+
+      for (let i = 0; i < bufferSize; i++) {
+        const fade = 1 - i / bufferSize;
+        data[i] = (Math.random() * 2 - 1) * fade;
+      }
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = filterType;
+      filter.frequency.setValueAtTime(filterFrequency, now);
+      filter.Q.setValueAtTime(0.8, now);
+
+      const gain = createGainNode(ctx, volume, now, end);
+      source.connect(filter);
+      filter.connect(gain);
+      source.start(now);
+      source.stop(end + 0.02);
+    }
+
+    function playSound(name) {
+      switch (name) {
+        case "jump":
+          playTone({ frequency: 360, endFrequency: 760, duration: 0.14, type: "sine", volume: 0.16 });
+          playTone({ frequency: 720, endFrequency: 980, duration: 0.08, type: "triangle", volume: 0.08, delay: 0.04 });
+          break;
+
+        case "headbutt":
+          playTone({ frequency: 120, endFrequency: 62, duration: 0.13, type: "square", volume: 0.22 });
+          playNoise({ duration: 0.08, volume: 0.12, filterFrequency: 320, filterType: "lowpass" });
+          break;
+
+        case "destroy":
+          playNoise({ duration: 0.22, volume: 0.22, filterFrequency: 1200, filterType: "bandpass" });
+          playTone({ frequency: 180, endFrequency: 72, duration: 0.20, type: "sawtooth", volume: 0.12 });
+          break;
+
+        case "explosion":
+          playTone({ frequency: 95, endFrequency: 32, duration: 0.42, type: "sawtooth", volume: 0.28 });
+          playNoise({ duration: 0.42, volume: 0.28, filterFrequency: 180, filterType: "lowpass" });
+          playNoise({ duration: 0.20, volume: 0.16, delay: 0.04, filterFrequency: 900, filterType: "bandpass" });
+          break;
+
+        case "mission":
+          playTone({ frequency: 523.25, duration: 0.12, type: "triangle", volume: 0.16 });
+          playTone({ frequency: 659.25, duration: 0.12, type: "triangle", volume: 0.16, delay: 0.10 });
+          playTone({ frequency: 783.99, duration: 0.18, type: "triangle", volume: 0.18, delay: 0.20 });
+          playTone({ frequency: 1046.5, duration: 0.24, type: "sine", volume: 0.12, delay: 0.34 });
+          break;
+
+        case "sword":
+          playTone({ frequency: 659.25, duration: 0.18, type: "sine", volume: 0.13 });
+          playTone({ frequency: 987.77, duration: 0.24, type: "sine", volume: 0.14, delay: 0.10 });
+          playTone({ frequency: 1318.51, duration: 0.34, type: "triangle", volume: 0.13, delay: 0.22 });
+          playNoise({ duration: 0.18, volume: 0.05, delay: 0.18, filterFrequency: 2400, filterType: "highpass" });
+          break;
+      }
     }
 
     function showMessage(text) {
@@ -2994,6 +3116,10 @@ createStaticBox(
       state.destroyedCount += 1;
       state.destroyedByName[obj.name] = (state.destroyedByName[obj.name] || 0) + 1;
 
+      if (obj.name !== "debris") {
+        playSound("destroy");
+      }
+
       addScore(obj.score + impactPower * 2, obj.mesh.position);
 
       const basePos = obj.mesh.position.clone();
@@ -3221,6 +3347,7 @@ createStaticBox(
     }
 
     function explodeAt(position, power = 10, radius = 8) {
+      playSound("explosion");
       showMessage("ドカーン！");
       createExplosionEffect(position);
       screenShake(0.35, 0.45);
@@ -3744,6 +3871,7 @@ createStaticBox(
       player.body.velocity.y = 8.4;
 
       state.jumpCooldown = 0.28;
+      playSound("jump");
       // addScore(2, player.mesh.position); ←※ジャンプでスコア2加算されていたので削除
       showMessage("ジャンプ！");
     }
@@ -3771,6 +3899,7 @@ createStaticBox(
       if (state.headbuttCooldown > 0) return;
 
       state.headbuttCooldown = 0.55;
+      playSound("headbutt");
 
       const playerPos = cannonToThreeVec3(player.body.position);
       const forward = new THREE.Vector3(
@@ -3987,6 +4116,7 @@ createStaticBox(
 
         if (!state.hasLegendarySword) {
           state.hasLegendarySword = true;
+          playSound("sword");
           updateMission();
           showMessage("伝説の剣を装備中は頭突きの威力アップ！");
         } else {
@@ -4340,6 +4470,7 @@ createStaticBox(
       }
 
       if (newlyCompleted.length > 0) {
+        playSound("mission");
         const totalReward = newlyCompleted.reduce((sum, mission) => sum + mission.reward, 0);
 
         if (totalReward > 0) {
@@ -4689,6 +4820,7 @@ createStaticBox(
       window.addEventListener("resize", onResize);
 
       startButton.addEventListener("pointerdown", () => {
+        resumeAudio();
         startOverlay.style.display = "none";
         state.started = true;
 
