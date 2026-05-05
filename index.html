@@ -383,15 +383,22 @@
       z-index: 50;
       display: grid;
       place-items: center;
+      overflow: auto;
+      padding: 12px;
+      box-sizing: border-box;
       background:
         radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.2), transparent 30%),
         linear-gradient(180deg, #73c7ff, #87ceeb 42%, #89d06b 42%);
       color: white;
       text-align: center;
+      -webkit-overflow-scrolling: touch;
     }
 
     #startCard {
       width: min(90vw, 560px);
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+      box-sizing: border-box;
       /* STARTボタン下にバージョン表記を置くため、下方向だけ少し広げる */
       padding: 24px 24px 34px;
       border-radius: 24px;
@@ -399,6 +406,7 @@
       border: 1px solid rgba(255, 255, 255, 0.32);
       box-shadow: 0 12px 50px rgba(0, 0, 0, 0.35);
       backdrop-filter: blur(6px);
+      -webkit-overflow-scrolling: touch;
     }
 
     #startCard h1 {
@@ -438,19 +446,22 @@
 
     #titleReturnButton {
       position: fixed;
-      right: 14px;
-      top: 86px;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
       z-index: 22;
       border: none;
       border-radius: 999px;
-      padding: 9px 14px;
-      background: rgba(255,255,255,0.88);
+      padding: 8px 13px;
+      background: rgba(255,255,255,0.9);
       color: #111;
       font-weight: 900;
+      font-size: 13px;
       box-shadow: 0 4px 14px rgba(0,0,0,0.32);
       pointer-events: auto;
       display: none;
       touch-action: none;
+      white-space: nowrap;
     }
 
     .modalOverlay {
@@ -557,6 +568,52 @@
       }
     }
 
+
+    @media (max-height: 520px) {
+      #startOverlay {
+        place-items: start center;
+        padding: 8px;
+      }
+
+      #startCard {
+        width: min(94vw, 620px);
+        max-height: calc(100vh - 16px);
+        padding: 12px 16px 14px;
+        border-radius: 18px;
+      }
+
+      #startCard h1 {
+        font-size: 22px;
+        margin-bottom: 4px;
+      }
+
+      #startCard p {
+        margin: 4px 0;
+        line-height: 1.35;
+        font-size: 12px;
+      }
+
+      .modeButton {
+        margin-top: 7px;
+        padding: 9px 18px;
+        font-size: 15px;
+        width: min(78vw, 300px);
+      }
+
+      #versionText {
+        margin-top: 7px;
+        font-size: 11px;
+      }
+    }
+
+    @media (max-width: 760px) and (orientation: landscape) {
+      #titleReturnButton {
+        bottom: 8px;
+        padding: 7px 11px;
+        font-size: 12px;
+      }
+    }
+
     @media (max-width: 760px) {
       #helpPanel {
         display: none;
@@ -622,7 +679,7 @@
     <div id="missionClearToast"></div>
   </div>
 
-  <button id="titleReturnButton">タイトル画面に戻る</button>
+  <button id="titleReturnButton">タイトルに戻る</button>
   <div id="modeStatusPanel"></div>
 
   <div id="controls">
@@ -653,7 +710,7 @@
       <button id="missionModeButton" class="modeButton">ミッション モード</button>
       <button id="timeAttackModeButton" class="modeButton">タイムアタック モード</button>
       <button id="endlessModeButton" class="modeButton">エンドレス モード</button>
-      <div id="versionText">Ver.1.3.1</div>
+      <div id="versionText">Ver.1.3.5</div>
     </div>
   </div>
 
@@ -6081,7 +6138,7 @@ createStaticBox(
         id: "score500000",
         title: "破壊神",
         desc: "スコアを500000点以上にする",
-        reward: 500000,
+        reward: 5000,
         progressText: () => `${state.score}/500000`,
         check: () => state.score >= 500000
       },
@@ -6198,10 +6255,14 @@ createStaticBox(
       }
 
       const nextMission = missions.find((mission) => !mission.completed && !mission.hidden);
+      const remainingSecretMission = missions.find((mission) => mission.hidden && !mission.completed);
+      const remainingAnyMission = missions.find((mission) => !mission.completed);
 
       if (nextMission) {
         missionTextEl.textContent = `${nextMission.title}：${nextMission.progressText()}`;
-      } else {
+      } else if (remainingSecretMission) {
+        missionTextEl.textContent = "通常ミッション達成！まだ何かが隠されているかも…";
+      } else if (!remainingAnyMission) {
         missionTextEl.textContent = "全ミッション達成！好きなだけ暴れよう！";
       }
 
