@@ -373,7 +373,8 @@
 
     #startCard {
       width: min(90vw, 560px);
-      padding: 24px;
+      /* STARTボタン下にバージョン表記を置くため、下方向だけ少し広げる */
+      padding: 24px 24px 34px;
       border-radius: 24px;
       background: rgba(0, 0, 0, 0.42);
       border: 1px solid rgba(255, 255, 255, 0.32);
@@ -406,6 +407,15 @@
 
     #startButton:active {
       transform: scale(0.96);
+    }
+
+    /* スタート画面のバージョン表記です。 */
+    #versionText {
+      margin-top: 12px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.82);
     }
 
     .floatingScore {
@@ -521,6 +531,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
+      <div id="versionText">Ver.1.1.18</div>
     </div>
   </div>
 
@@ -609,7 +620,7 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
 
-    scene.fog = new THREE.Fog(0x87ceeb, 45, 120);
+    scene.fog = new THREE.Fog(0x87ceeb, 60, 170);
 
     const camera = new THREE.PerspectiveCamera(
       65, // 視野角。大きいほど広角、小さいほどズーム気味になります。
@@ -736,6 +747,11 @@
     // このY座標より下に落ちると、プレイヤー/NPCが再出現します。
     // 数値を小さくするほど、長く落下してから戻ります。
     const FALL_RESET_Y = -35;
+
+    // マップ全体の広さです。150なら、中心から±75の範囲がフィールドになります。
+    const FIELD_SIZE = 150;
+    const FIELD_HALF_SIZE = FIELD_SIZE / 2;
+    const BOUNDARY_WALL_THICKNESS = 3;
 
     const joystick = {
       // スマホ左下の仮想スティックの状態です。
@@ -996,10 +1012,10 @@
     sun.castShadow = true;
     sun.shadow.mapSize.width = 2048;
     sun.shadow.mapSize.height = 2048;
-    sun.shadow.camera.left = -45;
-    sun.shadow.camera.right = 45;
-    sun.shadow.camera.top = 45;
-    sun.shadow.camera.bottom = -45;
+    sun.shadow.camera.left = -80;
+    sun.shadow.camera.right = 80;
+    sun.shadow.camera.top = 80;
+    sun.shadow.camera.bottom = -80;
     scene.add(sun);
 
     // =========================================================
@@ -1061,8 +1077,8 @@
       })
     };
 
-    textures.grass.repeat.set(18, 18);
-    textures.road.repeat.set(1.5, 12);
+    textures.grass.repeat.set(24, 24);
+    textures.road.repeat.set(1.5, 15);
     textures.wood.repeat.set(2, 2);
     textures.cardboard.repeat.set(2, 2);
     textures.board.repeat.set(1, 2);
@@ -1075,9 +1091,9 @@
     // =========================================================
 
     function createGround() {
-      // 地面の見た目サイズです。110 x 110 の平面を表示します。
-      // 後ろ2つの 12, 12 は分割数で、見た目の細かさに関係します。
-      const groundGeo = new THREE.PlaneGeometry(110, 110, 12, 12);
+      // 地面の見た目サイズです。FIELD_SIZEを変更するとマップ全体の広さを調整できます。
+      // 後ろ2つの 16, 16 は分割数で、見た目の細かさに関係します。
+      const groundGeo = new THREE.PlaneGeometry(FIELD_SIZE, FIELD_SIZE, 16, 16);
       const groundMat = new THREE.MeshStandardMaterial({
         map: textures.grass,
         color: 0xffffff,
@@ -1096,15 +1112,15 @@
         mass: 0,
         type: CANNON.Body.STATIC,
         material: groundMaterial,
-        // 地面の物理判定サイズです。表示サイズ110の半分なのでX/Zは55です。
-        shape: new CANNON.Box(new CANNON.Vec3(55, 0.1, 55))
+        // 地面の物理判定サイズです。表示サイズの半分をX/Zに設定します。
+        shape: new CANNON.Box(new CANNON.Vec3(FIELD_HALF_SIZE, 0.1, FIELD_HALF_SIZE))
       });
 
       groundBody.position.set(0, -0.1, 0);
       groundBody.allowSleep = false;
       world.addBody(groundBody);
 
-      const grid = new THREE.GridHelper(110, 40, 0xffffff, 0xffffff);
+      const grid = new THREE.GridHelper(FIELD_SIZE, 48, 0xffffff, 0xffffff);
       grid.material.opacity = 0.12;
       grid.material.transparent = true;
       scene.add(grid);
@@ -1113,31 +1129,35 @@
     function createBoundary() {
       // 外枠の壁色です。0xRRGGBB形式の色指定です。
       const wallColor = 0x5d8050;
+      const wallY = 1;
+      const wallHeight = 2;
+      const wallLength = FIELD_SIZE + BOUNDARY_WALL_THICKNESS * 2;
+      const wallPos = FIELD_HALF_SIZE + BOUNDARY_WALL_THICKNESS / 2;
 
       createStaticBox(
-        new THREE.Vector3(0, 1, -56),
-        new THREE.Vector3(114, 2, 3),
+        new THREE.Vector3(0, wallY, -wallPos),
+        new THREE.Vector3(wallLength, wallHeight, BOUNDARY_WALL_THICKNESS),
         wallColor,
         { name: "boundaryBack", friction: 0.2, restitution: 0.02 }
       );
 
       createStaticBox(
-        new THREE.Vector3(0, 1, 56),
-        new THREE.Vector3(114, 2, 3),
+        new THREE.Vector3(0, wallY, wallPos),
+        new THREE.Vector3(wallLength, wallHeight, BOUNDARY_WALL_THICKNESS),
         wallColor,
         { name: "boundaryFront", friction: 0.2, restitution: 0.02 }
       );
 
       createStaticBox(
-        new THREE.Vector3(-56, 1, 0),
-        new THREE.Vector3(3, 2, 114),
+        new THREE.Vector3(-wallPos, wallY, 0),
+        new THREE.Vector3(BOUNDARY_WALL_THICKNESS, wallHeight, wallLength),
         wallColor,
         { name: "boundaryLeft", friction: 0.2, restitution: 0.02 }
       );
 
       createStaticBox(
-        new THREE.Vector3(56, 1, 0),
-        new THREE.Vector3(3, 2, 114),
+        new THREE.Vector3(wallPos, wallY, 0),
+        new THREE.Vector3(BOUNDARY_WALL_THICKNESS, wallHeight, wallLength),
         wallColor,
         { name: "boundaryRight", friction: 0.2, restitution: 0.02 }
       );
@@ -1422,8 +1442,8 @@
           name: "板",
           breakable: true
         });
-      // 0.70〜0.90 : 車を出す割合です。
-      } else if (r < 0.9) {
+      // 0.70〜0.86 : 車を出す割合です。
+      } else if (r < 0.86) {
         obj = createDynamicBox({
           position,
           size: new THREE.Vector3(2.8, 1.0, 4.5),
@@ -1435,8 +1455,8 @@
           breakable: true,
           visualType: "car"
         });
-      // 0.90〜1.00 : あやしい赤箱を出す割合です。
-      } else {
+      // 0.86〜0.94 : あやしい赤箱を出す割合です。
+      } else if (r < 0.94) {
         obj = createDynamicBox({
           position,
           size: new THREE.Vector3(1.4, 1.4, 1.4),
@@ -1449,6 +1469,23 @@
           visualType: "dangerBox"
         });
         obj.explosive = true;
+      // 0.94〜1.00 : 家を出す割合です。
+      // spawnFromButton側の「破壊可能オブジェクト70%」の中に含めるため、
+      // ボタン全体の 人15%・犬15% の割合は変更しない。
+      } else {
+        obj = createDynamicBox({
+          position,
+          size: new THREE.Vector3(4.2, 4.2, 4.0),
+          color: [0xf2d19b, 0xe8c188, 0xf5d9a8][Math.floor(rand(0, 3))],
+          mass: 12,
+          hp: 900,
+          score: 320,
+          name: "家",
+          breakable: true,
+          visualType: "houseIntact"
+        });
+
+        obj.body.angularDamping = 0.82;
       }
 
       protectBreakableUntilGrounded(obj);
@@ -1531,9 +1568,10 @@
 
     function createMapProps() {
       // 道路
-      // BoxGeometry(幅, 高さ, 長さ)。現在は幅14、長さ105です。
+      // BoxGeometry(幅, 高さ, 長さ)。マップ拡張に合わせて長さを広げています。
+      const roadLength = 135;
       const road = new THREE.Mesh(
-        new THREE.BoxGeometry(14, 0.08, 105),
+        new THREE.BoxGeometry(14, 0.08, roadLength),
         new THREE.MeshStandardMaterial({
           map: textures.road,
           color: 0xffffff,
@@ -1547,7 +1585,7 @@
       // 道路の白線
       // テクスチャ内の線だとUVの都合で中央からずれたり片側だけに見えるため、
       // 専用の薄いBoxを道路の上に配置して、中央線と左右端線を正確に出す。
-      createRoadMarkings(-18, 0.11, 0, 14, 105);
+      createRoadMarkings(-18, 0.11, 0, 14, roadLength);
 
       // スロープ
       // 第1引数が位置、第2引数がサイズです。Yを上げると高くなります。
@@ -1676,6 +1714,13 @@ createStaticBox(
   0x8a8a8a,
   { name: "grayPlatformBackEdge" }
 );
+
+      // 広げたマップ外周側にも遊び場を追加
+      createStaticBox(new THREE.Vector3(58, 0.75, -58), new THREE.Vector3(8, 1.5, 8), 0x9f7b4f, { name: "outerSmallPlatformA" });
+      createStaticBox(new THREE.Vector3(-58, 0.75, 58), new THREE.Vector3(8, 1.5, 8), 0xaaaaaa, { name: "outerSmallPlatformB" });
+      createStaticBox(new THREE.Vector3(0, 0.55, 62), new THREE.Vector3(12, 1.1, 6), 0xb98243, { name: "outerRampA" });
+      createStaticBox(new THREE.Vector3(62, 1.2, 0), new THREE.Vector3(4, 2.4, 10), 0x8d653d, { name: "outerWallObstacleA" });
+      createStaticBox(new THREE.Vector3(-62, 1.2, -12), new THREE.Vector3(10, 2.4, 4), 0x8d653d, { name: "outerWallObstacleB" });
 
       // タイトル看板
       createTitleSign();
@@ -2302,11 +2347,11 @@ createStaticBox(
     }
 
     function getRandomNPCHighPosition() {
-      return new THREE.Vector3(rand(-42, 42), rand(14, 22), rand(-42, 42));
+      return new THREE.Vector3(rand(-62, 62), rand(14, 22), rand(-62, 62));
     }
 
     function getRandomSpawnHighPosition() {
-      return new THREE.Vector3(rand(-42, 42), rand(16, 24), rand(-42, 42));
+      return new THREE.Vector3(rand(-62, 62), rand(16, 24), rand(-62, 62));
     }
 
     function protectBreakableUntilGrounded(obj, duration = 9.0) {
@@ -2538,6 +2583,176 @@ createStaticBox(
       return sword;
     }
 
+    // 家オブジェクトの調整値です。
+    // HOUSE_COLLAPSE_IMPACT_THRESHOLD を上げるほど、ただ触れただけでは崩れにくくなります。
+    // HOUSE_PART_HP_MULTIPLIER を上げるほど、崩れた後の壁・屋根パーツが壊れにくくなります。
+    const HOUSE_COLLAPSE_IMPACT_THRESHOLD = 68;
+    const HOUSE_PART_HP_MULTIPLIER = 10;
+
+    // 家の見た目を作る関数です。
+    // 初回衝撃まではこのGroupのまま家の形を維持し、衝撃後に壁・屋根パーツへ分解します。
+    function createHouseMesh(size, color = 0xf2d19b) {
+      const group = new THREE.Group();
+
+      const wallMat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.78,
+        metalness: 0.02
+      });
+
+      const roofMat = new THREE.MeshStandardMaterial({
+        color: 0x9b3b2f,
+        roughness: 0.72,
+        metalness: 0.02
+      });
+
+      const doorMat = new THREE.MeshStandardMaterial({
+        color: 0x5c3518,
+        roughness: 0.85
+      });
+
+      const windowMat = new THREE.MeshStandardMaterial({
+        color: 0x93dfff,
+        roughness: 0.25,
+        metalness: 0.05,
+        emissive: 0x153344,
+        emissiveIntensity: 0.12
+      });
+
+      const bodyHeight = size.y * 0.72;
+      const wallThickness = 0.18;
+      const wallY = -size.y / 2 + bodyHeight / 2;
+
+      function addBox(name, boxSize, pos, mat) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(boxSize.x, boxSize.y, boxSize.z),
+          mat
+        );
+        mesh.position.copy(pos);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData.partName = name;
+        group.add(mesh);
+        return mesh;
+      }
+
+      addBox("frontWall", new THREE.Vector3(size.x, bodyHeight, wallThickness), new THREE.Vector3(0, wallY, -size.z / 2), wallMat);
+      addBox("backWall", new THREE.Vector3(size.x, bodyHeight, wallThickness), new THREE.Vector3(0, wallY, size.z / 2), wallMat);
+      addBox("leftWall", new THREE.Vector3(wallThickness, bodyHeight, size.z), new THREE.Vector3(-size.x / 2, wallY, 0), wallMat);
+      addBox("rightWall", new THREE.Vector3(wallThickness, bodyHeight, size.z), new THREE.Vector3(size.x / 2, wallY, 0), wallMat);
+
+      // 屋根は、左右2枚の板をX方向に傾けて三角屋根にする。
+      // Z方向にずらすと、見る角度によって屋根が交差して見えるため、左右ともZ=0にそろえる。
+      const roofAngle = 0.52;
+      const roofPanelSize = new THREE.Vector3(size.x * 0.68, 0.24, size.z * 1.18);
+      const roofY = -size.y / 2 + bodyHeight + 0.45;
+      const roofX = size.x * 0.28;
+      const roofLeft = addBox("roofLeft", roofPanelSize, new THREE.Vector3(-roofX, roofY, 0), roofMat);
+      // 左屋根は中心側が高くなる向きに傾ける。
+      roofLeft.rotation.z = roofAngle;
+      const roofRight = addBox("roofRight", roofPanelSize, new THREE.Vector3(roofX, roofY, 0), roofMat);
+      // 右屋根は中心側が高くなる向きに傾ける。
+      roofRight.rotation.z = -roofAngle;
+
+      // 屋根の頂点に細い棟を追加して、家らしい形に見えるようにする。
+      addBox("roofRidge", new THREE.Vector3(0.22, 0.22, size.z * 1.22), new THREE.Vector3(0, roofY + 0.34, 0), roofMat);
+
+      addBox("door", new THREE.Vector3(0.75, 1.25, 0.06), new THREE.Vector3(-0.65, -size.y / 2 + 0.62, -size.z / 2 - 0.04), doorMat);
+      addBox("windowL", new THREE.Vector3(0.58, 0.48, 0.06), new THREE.Vector3(0.35, -size.y / 2 + 1.25, -size.z / 2 - 0.045), windowMat);
+      addBox("windowR", new THREE.Vector3(0.58, 0.48, 0.06), new THREE.Vector3(1.1, -size.y / 2 + 1.25, -size.z / 2 - 0.045), windowMat);
+
+      group.userData.houseSize = size.clone();
+      return group;
+    }
+
+    function createHousePart({ position, size, color, mass, hp, score, name, rotation = null, impulse = null }) {
+      const part = createDynamicBox({
+        position,
+        size,
+        color,
+        mass,
+        hp,
+        score,
+        name,
+        breakable: true
+      });
+
+      if (rotation) {
+        part.body.quaternion.setFromEuler(rotation.x, rotation.y, rotation.z);
+        part.mesh.quaternion.set(part.body.quaternion.x, part.body.quaternion.y, part.body.quaternion.z, part.body.quaternion.w);
+      }
+
+      if (impulse) {
+        part.body.wakeUp();
+        part.body.applyImpulse(threeToCannonVec3(impulse), part.body.position);
+        part.body.angularVelocity.set(rand(-0.9, 0.9), rand(-0.9, 0.9), rand(-0.9, 0.9));
+      }
+
+      return part;
+    }
+
+    function collapseHouse(obj, impactPower = 16) {
+      if (obj.destroyed || obj.collapsed) return;
+      obj.collapsed = true;
+      obj.destroyed = true;
+
+      state.destroyedCount += 1;
+      state.destroyedByName[obj.name] = (state.destroyedByName[obj.name] || 0) + 1;
+      addScore(obj.score + impactPower * 2, obj.mesh.position);
+
+      const basePos = obj.mesh.position.clone();
+      const baseQuat = obj.mesh.quaternion.clone();
+      const size = obj.size.clone();
+      const bodyHeight = size.y * 0.72;
+      const wallThickness = 0.18;
+      const wallColor = obj.colorHex ?? 0xf2d19b;
+      const roofColor = 0x9b3b2f;
+      const roofAngle = 0.52;
+      const roofPanelSize = new THREE.Vector3(size.x * 0.68, 0.24, size.z * 1.18);
+      const roofY = -size.y / 2 + bodyHeight + 0.45;
+      const roofX = size.x * 0.28;
+
+      scene.remove(obj.mesh);
+      world.removeBody(obj.body);
+
+      const idx = gameObjects.indexOf(obj);
+      if (idx >= 0) gameObjects.splice(idx, 1);
+      const dIdx = destructibles.indexOf(obj);
+      if (dIdx >= 0) destructibles.splice(dIdx, 1);
+
+      function localToWorld(local) {
+        return local.clone().applyQuaternion(baseQuat).add(basePos);
+      }
+
+      const parts = [
+        { name: "家の前壁", size: new THREE.Vector3(size.x, bodyHeight, wallThickness), local: new THREE.Vector3(0, -size.y / 2 + bodyHeight / 2, -size.z / 2), color: wallColor, hp: 110 * HOUSE_PART_HP_MULTIPLIER, score: 95, rot: new THREE.Vector3(0, 0, 0), imp: new THREE.Vector3(0, 0.9, -1.15) },
+        { name: "家の後壁", size: new THREE.Vector3(size.x, bodyHeight, wallThickness), local: new THREE.Vector3(0, -size.y / 2 + bodyHeight / 2, size.z / 2), color: wallColor, hp: 110 * HOUSE_PART_HP_MULTIPLIER, score: 95, rot: new THREE.Vector3(0, 0, 0), imp: new THREE.Vector3(0, 0.9, 1.15) },
+        { name: "家の左壁", size: new THREE.Vector3(wallThickness, bodyHeight, size.z), local: new THREE.Vector3(-size.x / 2, -size.y / 2 + bodyHeight / 2, 0), color: wallColor, hp: 110 * HOUSE_PART_HP_MULTIPLIER, score: 95, rot: new THREE.Vector3(0, 0, 0), imp: new THREE.Vector3(-1.15, 0.9, 0) },
+        { name: "家の右壁", size: new THREE.Vector3(wallThickness, bodyHeight, size.z), local: new THREE.Vector3(size.x / 2, -size.y / 2 + bodyHeight / 2, 0), color: wallColor, hp: 110 * HOUSE_PART_HP_MULTIPLIER, score: 95, rot: new THREE.Vector3(0, 0, 0), imp: new THREE.Vector3(1.15, 0.9, 0) },
+        { name: "家の屋根", size: roofPanelSize.clone(), local: new THREE.Vector3(-roofX, roofY, 0), color: roofColor, hp: 140 * HOUSE_PART_HP_MULTIPLIER, score: 130, rot: new THREE.Vector3(0, 0, roofAngle), imp: new THREE.Vector3(-0.9, 1.25, 0) },
+        { name: "家の屋根", size: roofPanelSize.clone(), local: new THREE.Vector3(roofX, roofY, 0), color: roofColor, hp: 140 * HOUSE_PART_HP_MULTIPLIER, score: 130, rot: new THREE.Vector3(0, 0, -roofAngle), imp: new THREE.Vector3(0.9, 1.25, 0) },
+        { name: "家の屋根の棟", size: new THREE.Vector3(0.22, 0.22, size.z * 1.22), local: new THREE.Vector3(0, roofY + 0.34, 0), color: roofColor, hp: 120 * HOUSE_PART_HP_MULTIPLIER, score: 90, rot: new THREE.Vector3(0, 0, 0), imp: new THREE.Vector3(0, 1.15, 0) }
+      ];
+
+      for (const partData of parts) {
+        // 初回衝撃では「爆発」ではなく、家の形が少し崩れる程度に抑える。
+        const impulse = partData.imp.clone().multiplyScalar(Math.min(1.8, Math.max(0.8, impactPower / 24)));
+        createHousePart({
+          position: localToWorld(partData.local),
+          size: partData.size,
+          color: partData.color,
+          mass: partData.name.includes("屋根") ? 1.4 : 1.1,
+          hp: partData.hp,
+          score: partData.score,
+          name: partData.name,
+          rotation: partData.rot,
+          impulse
+        });
+      }
+
+      showMessage("家が崩れた！");
+    }
+
     // 破壊可能/移動可能な物理オブジェクトを作る共通関数です。
     // options.position   : 初期位置
     // options.size       : サイズ
@@ -2565,6 +2780,8 @@ createStaticBox(
 
       if (visualType === "car") {
         mesh = createCarMesh(size, color);
+      } else if (visualType === "houseIntact") {
+        mesh = createHouseMesh(size, color);
       } else if (visualType === "dangerBox") {
         mesh = createDangerBoxMesh(size, color);
       } else {
@@ -2663,7 +2880,15 @@ createStaticBox(
       const relativeVelocity = event.contact.getImpactVelocityAlongNormal();
       const impact = Math.abs(relativeVelocity) * obj.body.mass;
 
+      if (obj.visualType === "houseIntact") {
+        if (impact > HOUSE_COLLAPSE_IMPACT_THRESHOLD) {
+          collapseHouse(obj, impact);
+        }
+        return;
+      }
+
       if (impact > 9) {
+
         obj.hp -= impact * 0.7;
 
         // 衝突しただけではスコア加算しない。
@@ -2734,9 +2959,9 @@ createStaticBox(
     // 個数、位置、サイズ、hp、score を調整したい場合はこの関数内を変更します。
     function createObjects() {
       // 箱エリア
-      for (let i = 0; i < 26; i++) {
+      for (let i = 0; i < 34; i++) {
         createDynamicBox({
-          position: new THREE.Vector3(rand(-12, 26), rand(1, 8), rand(-28, 28)),
+          position: new THREE.Vector3(rand(-52, 52), rand(1, 8), rand(-52, 52)),
           size: new THREE.Vector3(rand(0.8, 1.7), rand(0.8, 1.7), rand(0.8, 1.7)),
           color: [0xc98b43, 0x7cc0ff, 0xffd36b, 0xff8aad, 0xb493ff][i % 5],
           mass: rand(0.7, 2.2),
@@ -2767,9 +2992,9 @@ createStaticBox(
       // 板オブジェクト
       // i < 10 の 10 が板の初期配置数です。
       // 破壊不能の固定看板と区別するため、名称は「板」にする
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 16; i++) {
         createDynamicBox({
-          position: new THREE.Vector3(rand(-34, 34), 1.4, rand(-34, 34)),
+          position: new THREE.Vector3(rand(-58, 58), 1.4, rand(-58, 58)),
           size: new THREE.Vector3(0.35, 2.4, 1.4),
           color: 0xffee55,
           mass: 1.2,
@@ -2786,7 +3011,9 @@ createStaticBox(
         new THREE.Vector3(8, 1.2, -18),
         new THREE.Vector3(-8, 1.2, 18),
         new THREE.Vector3(24, 1.2, 4),
-        new THREE.Vector3(-26, 1.2, -4)
+        new THREE.Vector3(-26, 1.2, -4),
+        new THREE.Vector3(48, 1.2, 44),
+        new THREE.Vector3(-50, 1.2, 46)
       ];
 
       for (let i = 0; i < dangerPositions.length; i++) {
@@ -2804,6 +3031,30 @@ createStaticBox(
         });
 
         bomb.explosive = true;
+      }
+
+      // 新規の破壊可能オブジェクト「家」
+      // 最初は家の形を維持し、初回衝撃で壁・屋根パーツに分解する。
+      const housePositions = [
+        new THREE.Vector3(48, 2.1, -46),
+        new THREE.Vector3(-50, 2.1, 38),
+        new THREE.Vector3(58, 2.1, 18)
+      ];
+
+      for (let i = 0; i < housePositions.length; i++) {
+        const house = createDynamicBox({
+          position: housePositions[i],
+          size: new THREE.Vector3(4.2, 4.2, 4.0),
+          color: [0xf2d19b, 0xe8c188, 0xf5d9a8][i % 3],
+          mass: 12,
+          hp: 900,
+          score: 320,
+          name: "家",
+          breakable: true,
+          visualType: "houseIntact"
+        });
+
+        house.body.angularDamping = 0.82;
       }
     }
 
@@ -3506,6 +3757,11 @@ createStaticBox(
 
           if (obj.breakable) {
             if (!obj.spawnProtectedUntilGrounded) {
+              if (obj.visualType === "houseIntact") {
+                collapseHouse(obj, impulsePower);
+                continue;
+              }
+
               obj.hp -= impulsePower * 3.0;
               if (obj.hp <= 0) {
                 destroyObject(obj, impulsePower);
