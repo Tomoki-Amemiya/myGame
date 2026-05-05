@@ -412,20 +412,118 @@
       font-size: 14px;
     }
 
-    #startButton {
-      margin-top: 18px;
+    .modeButton {
+      margin-top: 12px;
       border: none;
       border-radius: 999px;
-      padding: 16px 36px;
-      font-size: 20px;
+      padding: 14px 28px;
+      font-size: 18px;
       font-weight: 900;
-      background: #4caf50;
       color: white;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+      display: block;
+      width: min(86vw, 330px);
+      margin-left: auto;
+      margin-right: auto;
+      touch-action: none;
     }
 
-    #startButton:active {
+    .modeButton:active {
       transform: scale(0.96);
+    }
+
+    #missionModeButton { background: #4caf50; }
+    #timeAttackModeButton { background: #f4511e; }
+    #endlessModeButton { background: #3f51b5; }
+
+    #titleReturnButton {
+      position: fixed;
+      right: 14px;
+      top: 86px;
+      z-index: 22;
+      border: none;
+      border-radius: 999px;
+      padding: 9px 14px;
+      background: rgba(255,255,255,0.88);
+      color: #111;
+      font-weight: 900;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.32);
+      pointer-events: auto;
+      display: none;
+      touch-action: none;
+    }
+
+    .modalOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 95;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.58);
+      color: white;
+      padding: 18px;
+    }
+
+    .modalOverlay.hidden { display: none; }
+
+    .modalCard {
+      width: min(90vw, 460px);
+      background: rgba(22, 25, 30, 0.97);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 22px;
+      padding: 22px;
+      text-align: center;
+      box-shadow: 0 12px 44px rgba(0,0,0,0.48);
+    }
+
+    .modalCard h2 {
+      margin: 0 0 12px;
+      font-size: 24px;
+    }
+
+    .modalCard p {
+      line-height: 1.65;
+      margin: 10px 0;
+    }
+
+    .modalButtons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .modalButton {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 26px;
+      font-weight: 900;
+      font-size: 16px;
+      touch-action: none;
+    }
+
+    .modalButton.yes { background: #ff7043; color: white; }
+    .modalButton.no { background: white; color: #222; }
+
+    #returnConfirmOverlay {
+      z-index: 110;
+    }
+
+    #modeStatusPanel {
+      position: fixed;
+      left: 12px;
+      top: 102px;
+      z-index: 11;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: white;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.65);
+      font-weight: 800;
+      pointer-events: none;
+      display: none;
     }
 
     /* スタート画面のバージョン表記です。 */
@@ -524,6 +622,9 @@
     <div id="missionClearToast"></div>
   </div>
 
+  <button id="titleReturnButton">タイトル画面に戻る</button>
+  <div id="modeStatusPanel"></div>
+
   <div id="controls">
     <div id="joystickArea">
       <div id="joystickKnob"></div>
@@ -549,8 +650,10 @@
         スマホ：左スティックで移動、右ボタンでアクション。<br />
         PC：WASD / Space / E / Q / Shift / R。
       </p>
-      <button id="startButton">START</button>
-      <div id="versionText">Ver.1.2.8</div>
+      <button id="missionModeButton" class="modeButton">ミッション モード</button>
+      <button id="timeAttackModeButton" class="modeButton">タイムアタック モード</button>
+      <button id="endlessModeButton" class="modeButton">エンドレス モード</button>
+      <div id="versionText">Ver.1.3.1</div>
     </div>
   </div>
 
@@ -561,6 +664,27 @@
         <button id="missionCloseButton">閉じる</button>
       </div>
       <div id="missionList"></div>
+    </div>
+  </div>
+
+  <div id="returnConfirmOverlay" class="modalOverlay hidden">
+    <div class="modalCard">
+      <h2>確認</h2>
+      <p>ゲームを終了して、タイトル画面に戻りますか？</p>
+      <div class="modalButtons">
+        <button id="returnYesButton" class="modalButton yes">はい</button>
+        <button id="returnNoButton" class="modalButton no">いいえ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="resultOverlay" class="modalOverlay hidden">
+    <div class="modalCard">
+      <h2>RESULT</h2>
+      <p id="resultText">スコア：0</p>
+      <div class="modalButtons">
+        <button id="resultTitleButton" class="modalButton yes">タイトル画面に戻る</button>
+      </div>
     </div>
   </div>
 
@@ -621,7 +745,17 @@
     const messageEl = document.getElementById("message");
     const missionClearToastEl = document.getElementById("missionClearToast");
     const startOverlay = document.getElementById("startOverlay");
-    const startButton = document.getElementById("startButton");
+    const missionModeButton = document.getElementById("missionModeButton");
+    const timeAttackModeButton = document.getElementById("timeAttackModeButton");
+    const endlessModeButton = document.getElementById("endlessModeButton");
+    const titleReturnButton = document.getElementById("titleReturnButton");
+    const returnConfirmOverlay = document.getElementById("returnConfirmOverlay");
+    const returnYesButton = document.getElementById("returnYesButton");
+    const returnNoButton = document.getElementById("returnNoButton");
+    const resultOverlay = document.getElementById("resultOverlay");
+    const resultTextEl = document.getElementById("resultText");
+    const resultTitleButton = document.getElementById("resultTitleButton");
+    const modeStatusPanelEl = document.getElementById("modeStatusPanel");
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -706,6 +840,13 @@
     const state = {
       // ゲーム開始済みかどうか。START押下後に true になります。
       started: false,
+      currentMode: "title",
+      gameOver: false,
+      modeElapsed: 0,
+      periodicSpawnTimer: 0,
+      groundCollapseTimer: 0,
+      groundCollapseLayer: 0,
+      centerGroundCollapsed: false,
 
       // ゲーム開始直後に、落下や初期衝突で壊れないようにする保護時間です。秒単位。
       startProtectionTimer: 0,
@@ -791,6 +932,20 @@
     const gameObjects = [];
     const destructibles = [];
     const staticPlatforms = [];
+
+    // タイムアタックモードで「高台」「道路」などの通常マップ用固定物を消すため、
+    // createStaticBoxで作成した固定物と道路表示メッシュを保持しておく。
+    const staticBoxes = [];
+    const roadVisualObjects = [];
+
+    const groundSystem = {
+      mainMesh: null,
+      mainBody: null,
+      mainGrid: null,
+      timeAttackTiles: [],
+      tileCount: 9,
+      tileSize: FIELD_SIZE / 9
+    };
 
     // ランダム移動するNPC
     // gameObjectsにも登録するため、既存のベロ・頭突き対象として扱える
@@ -1008,6 +1163,25 @@
 
     function threeToCannonVec3(v) {
       return new CANNON.Vec3(v.x, v.y, v.z);
+    }
+
+    function markBroadphaseDirty() {
+      // タイムアタックでは地面タイルを途中で追加/削除するため、
+      // SAPBroadphase の内部リストが古いままだと、見た目の地面と物理判定がズレることがある。
+      // Body追加/削除後に dirty を立て、次回の物理計算で判定リストを作り直させる。
+      if (world && world.broadphase && Object.prototype.hasOwnProperty.call(world.broadphase, "dirty")) {
+        world.broadphase.dirty = true;
+      }
+    }
+
+    function useStableBroadphaseForDynamicGround() {
+      // タイムアタックの崩れる地面は、静的Bodyを頻繁に追加/削除する。
+      // SAPBroadphase だと環境によって削除済み地面が残ったり、追加済み地面が効かないことがあるため、
+      // タイムアタック中だけ素直な総当たり判定へ切り替える。
+      if (CANNON.NaiveBroadphase && !(world.broadphase instanceof CANNON.NaiveBroadphase)) {
+        world.broadphase = new CANNON.NaiveBroadphase();
+      }
+      markBroadphaseDirty();
     }
 
     function syncMeshWithBody(mesh, body) {
@@ -1260,6 +1434,356 @@
     //  地面・フィールド
     // =========================================================
 
+    function hideMissionUIForMode() {
+      const missionEnabled = state.currentMode === "mission";
+      missionPanelEl.style.display = missionEnabled ? "block" : "none";
+      if (!missionEnabled) {
+        missionOverlayEl.classList.add("hidden");
+        missionClearToastEl.classList.remove("show", "secretMissionToast");
+      }
+    }
+
+    function updateModeStatusText() {
+      if (!modeStatusPanelEl) return;
+
+      if (!state.started || state.currentMode === "mission") {
+        modeStatusPanelEl.style.display = "none";
+        return;
+      }
+
+      modeStatusPanelEl.style.display = "block";
+      if (state.currentMode === "timeAttack") {
+        const nextSpawn = Math.max(0, Math.ceil(state.periodicSpawnTimer));
+        const nextCollapse = Math.max(0, Math.ceil(state.groundCollapseTimer));
+        modeStatusPanelEl.innerHTML = `TIME ATTACK<br>経過 ${Math.floor(state.modeElapsed)}秒<br>次の落下 ${nextSpawn}秒 / 地面崩壊 ${nextCollapse}秒`;
+      } else if (state.currentMode === "endless") {
+        const nextSpawn = Math.max(0, Math.ceil(state.periodicSpawnTimer));
+        modeStatusPanelEl.innerHTML = `ENDLESS<br>経過 ${Math.floor(state.modeElapsed)}秒<br>次の落下 ${nextSpawn}秒`;
+      }
+    }
+
+    function requestReturnToTitle() {
+      if (!returnConfirmOverlay) return;
+      returnConfirmOverlay.classList.remove("hidden");
+    }
+
+    function cancelReturnToTitle() {
+      if (!returnConfirmOverlay) return;
+      returnConfirmOverlay.classList.add("hidden");
+    }
+
+    function confirmReturnToTitle() {
+      // 物理ワールドを完全に初期状態へ戻すため、ページを再読み込みしてタイトル画面へ戻す。
+      window.location.reload();
+    }
+
+    function spawnBreakableRain(count = 10) {
+      for (let i = 0; i < count; i++) {
+        spawnRandomBreakableFromSky(getRandomSpawnHighPosition());
+      }
+    }
+
+    function removeGameObjectCompletely(obj) {
+      if (!obj) return;
+
+      if (state.lickTarget === obj) {
+        state.lickTarget = null;
+        if (state.lickLine) {
+          scene.remove(state.lickLine);
+          state.lickLine = null;
+        }
+      }
+
+      if (obj.mesh && obj.mesh.parent) {
+        scene.remove(obj.mesh);
+      }
+
+      if (obj.body && obj.body.world) {
+        world.removeBody(obj.body);
+        markBroadphaseDirty();
+      }
+
+      const arrays = [gameObjects, destructibles, jumpPads, cannons, npcs];
+      for (const array of arrays) {
+        let index = array.indexOf(obj);
+        while (index >= 0) {
+          array.splice(index, 1);
+          index = array.indexOf(obj);
+        }
+      }
+
+      obj.destroyed = true;
+      obj.removedForTimeAttack = true;
+    }
+
+    function removeTimeAttackUnusedGimmicks() {
+      // タイムアタックでは地面が外周から崩れるため、固定・特殊ギミックは使わない。
+      // これにより、地面崩壊後にジャンプ台・大砲・タイトル看板だけが空中に残る状態を防ぐ。
+      const targets = [
+        ...jumpPads,
+        ...cannons,
+        ...gameObjects.filter((obj) => obj && obj.visualType === "titleSignBoard")
+      ];
+
+      for (const obj of targets) {
+        removeGameObjectCompletely(obj);
+      }
+    }
+
+    function removeNormalMapPropsForTimeAttack() {
+      // タイムアタックでは外周から地面が崩れるため、通常マップ用の高台・階段・道路は取り除く。
+      // 境界壁はフィールド外へ出すぎないために残す。
+      for (const item of staticBoxes) {
+        if (!item || item.removed || !item.body || !item.name) continue;
+        if (item.name.startsWith("boundary")) continue;
+
+        item.removed = true;
+        if (item.mesh && item.mesh.parent) scene.remove(item.mesh);
+        if (item.body.world) {
+          world.removeBody(item.body);
+          markBroadphaseDirty();
+        }
+
+        const platformIndex = staticPlatforms.indexOf(item.platformInfo);
+        if (platformIndex >= 0) staticPlatforms.splice(platformIndex, 1);
+      }
+
+      for (const mesh of roadVisualObjects) {
+        if (mesh && mesh.parent) scene.remove(mesh);
+      }
+
+      // 灰色高台上のスポーンボタンは高台が無い状態では浮いてしまうため、表示・判定を止める。
+      if (spawnButton.mesh && spawnButton.mesh.parent) scene.remove(spawnButton.mesh);
+      spawnButton.mesh = null;
+      spawnButton.cooldown = 999999;
+    }
+
+    function removeMainGroundForTimeAttack() {
+      if (groundSystem.mainMesh && groundSystem.mainMesh.parent) {
+        scene.remove(groundSystem.mainMesh);
+      }
+      if (groundSystem.mainBody && groundSystem.mainBody.world) {
+        world.removeBody(groundSystem.mainBody);
+        markBroadphaseDirty();
+      }
+      if (groundSystem.mainGrid && groundSystem.mainGrid.parent) {
+        scene.remove(groundSystem.mainGrid);
+      }
+      groundSystem.mainMesh = null;
+      groundSystem.mainBody = null;
+      groundSystem.mainGrid = null;
+    }
+
+    function createTimeAttackGroundTiles() {
+      useStableBroadphaseForDynamicGround();
+      removeMainGroundForTimeAttack();
+      groundSystem.timeAttackTiles.length = 0;
+
+      const count = groundSystem.tileCount;
+      const tileSize = groundSystem.tileSize;
+      const start = -FIELD_SIZE / 2 + tileSize / 2;
+      const tileMat = new THREE.MeshStandardMaterial({
+        map: textures.grass,
+        color: 0xffffff,
+        roughness: 0.95,
+        metalness: 0
+      });
+
+      for (let ix = 0; ix < count; ix++) {
+        for (let iz = 0; iz < count; iz++) {
+          const x = start + ix * tileSize;
+          const z = start + iz * tileSize;
+          const mesh = new THREE.Mesh(new THREE.BoxGeometry(tileSize - 0.15, 0.2, tileSize - 0.15), tileMat);
+          mesh.position.set(x, -0.1, z);
+          mesh.receiveShadow = true;
+          scene.add(mesh);
+
+          const body = new CANNON.Body({
+            mass: 0,
+            type: CANNON.Body.STATIC,
+            material: groundMaterial,
+            shape: new CANNON.Box(new CANNON.Vec3((tileSize - 0.15) / 2, 0.1, (tileSize - 0.15) / 2))
+          });
+          body.position.set(x, -0.1, z);
+          body.allowSleep = false;
+          body.aabbNeedsUpdate = true;
+          body.updateAABB();
+          world.addBody(body);
+          markBroadphaseDirty();
+
+          groundSystem.timeAttackTiles.push({ mesh, body, ix, iz, removed: false });
+        }
+      }
+    }
+
+    function collapseNextGroundRing() {
+      if (state.currentMode !== "timeAttack" || state.gameOver) return;
+
+      const count = groundSystem.tileCount;
+      const layer = state.groundCollapseLayer;
+      const maxLayer = Math.floor(count / 2);
+
+      for (const tile of groundSystem.timeAttackTiles) {
+        if (tile.removed) continue;
+
+        const isLayer =
+          tile.ix === layer || tile.iz === layer ||
+          tile.ix === count - 1 - layer || tile.iz === count - 1 - layer;
+
+        if (isLayer) {
+          tile.removed = true;
+          if (tile.mesh.parent) scene.remove(tile.mesh);
+          if (tile.body && tile.body.world) {
+            world.removeBody(tile.body);
+            markBroadphaseDirty();
+          }
+        }
+      }
+
+      if (layer >= maxLayer) {
+        state.centerGroundCollapsed = true;
+        showMessage("中央の地面が崩壊！落ちたら終了！");
+      } else {
+        showMessage(`地面が外側から崩壊！ 残り ${maxLayer - layer}段`);
+      }
+
+      state.groundCollapseLayer += 1;
+      wakeObjectsOverCollapsedTimeAttackGround();
+      screenShake(0.28, 0.32);
+    }
+
+    function isPositionOnActiveTimeAttackTile(x, z, extraMargin = 0) {
+      if (state.currentMode !== "timeAttack" || groundSystem.timeAttackTiles.length === 0) return true;
+
+      const halfTile = (groundSystem.tileSize - 0.15) / 2 + extraMargin;
+
+      for (const tile of groundSystem.timeAttackTiles) {
+        if (!tile || tile.removed || !tile.mesh) continue;
+
+        if (
+          Math.abs(x - tile.mesh.position.x) <= halfTile &&
+          Math.abs(z - tile.mesh.position.z) <= halfTile
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function wakeObjectsOverCollapsedTimeAttackGround() {
+      if (state.currentMode !== "timeAttack" || groundSystem.timeAttackTiles.length === 0) return;
+
+      for (const obj of gameObjects) {
+        if (!obj || !obj.body || obj.destroyed) continue;
+
+        // タイムアタックで地面が消えた直後、眠っている破壊可能オブジェクトは
+        // 接触が外れても物理計算が再開されず、空中に残ることがある。
+        // まだ残っている地面タイル上にいないものだけ起こして、軽く下方向へ動かす。
+        if (!obj.breakable) continue;
+
+        const body = obj.body;
+        const size = obj.size || new THREE.Vector3(1, 1, 1);
+        const centerX = body.position.x;
+        const centerZ = body.position.z;
+        const halfX = Math.max((size.x || 1) / 2, 0.4);
+        const halfZ = Math.max((size.z || 1) / 2, 0.4);
+
+        const stillSupported =
+          isPositionOnActiveTimeAttackTile(centerX, centerZ, Math.max(halfX, halfZ) * 0.35) ||
+          isPositionOnActiveTimeAttackTile(centerX + halfX * 0.75, centerZ, 0.05) ||
+          isPositionOnActiveTimeAttackTile(centerX - halfX * 0.75, centerZ, 0.05) ||
+          isPositionOnActiveTimeAttackTile(centerX, centerZ + halfZ * 0.75, 0.05) ||
+          isPositionOnActiveTimeAttackTile(centerX, centerZ - halfZ * 0.75, 0.05);
+
+        if (!stillSupported) {
+          body.wakeUp();
+          body.sleepState = CANNON.Body.AWAKE;
+          body.velocity.y = Math.min(body.velocity.y, -1.2);
+          body.force.y = Math.min(body.force.y, -18);
+          body.aabbNeedsUpdate = true;
+
+          if (obj.spawnProtectedUntilGrounded) {
+            obj.spawnProtectedUntilGrounded = false;
+            obj.spawnProtectionTimer = 0;
+          }
+        }
+      }
+    }
+
+    function startGameMode(mode) {
+      state.currentMode = mode;
+      state.started = true;
+      state.gameOver = false;
+      state.modeElapsed = 0;
+      state.periodicSpawnTimer = mode === "timeAttack" ? 10.0 : 5.0;
+      state.groundCollapseTimer = mode === "timeAttack" ? 10.0 : 5.0;
+      state.groundCollapseLayer = 0;
+      state.centerGroundCollapsed = false;
+      state.startProtectionTimer = 3.0;
+
+      startOverlay.style.display = "none";
+      if (titleReturnButton) titleReturnButton.style.display = "block";
+      hideMissionUIForMode();
+
+      if (mode === "mission") {
+        updateMission();
+        showMessage("ミッションモード開始！準備中...");
+      } else if (mode === "timeAttack") {
+        removeNormalMapPropsForTimeAttack();
+        removeTimeAttackUnusedGimmicks();
+        createTimeAttackGroundTiles();
+        // 既存の初期配置に加えて、通常の約5倍相当になる量の破壊可能オブジェクトを空から投入する。
+        // 以前は約10倍相当だったため、負荷と画面密度を抑える。
+        spawnBreakableRain(64 * 4);
+        showMessage("タイムアタック開始！壊しまくれ！");
+      } else if (mode === "endless") {
+        showMessage("エンドレスモード開始！好きなだけ暴れよう！");
+      }
+
+      updateModeStatusText();
+    }
+
+    function updateSpecialMode(delta) {
+      if (!state.started || state.gameOver) return;
+      if (state.currentMode !== "timeAttack" && state.currentMode !== "endless") return;
+
+      state.modeElapsed += delta;
+      state.periodicSpawnTimer -= delta;
+
+      if (state.periodicSpawnTimer <= 0) {
+        spawnBreakableRain(10);
+        state.periodicSpawnTimer += state.currentMode === "timeAttack" ? 10.0 : 5.0;
+        showMessage("破壊可能オブジェクトが落下！");
+      }
+
+      if (state.currentMode === "timeAttack") {
+        state.groundCollapseTimer -= delta;
+        if (state.groundCollapseTimer <= 0) {
+          collapseNextGroundRing();
+          state.groundCollapseTimer += 10.0;
+        }
+      }
+
+      if (state.currentMode === "timeAttack") {
+        wakeObjectsOverCollapsedTimeAttackGround();
+      }
+
+      updateModeStatusText();
+    }
+
+    function showTimeAttackResult() {
+      if (state.gameOver) return;
+      state.gameOver = true;
+      state.started = false;
+      if (resultTextEl) {
+        resultTextEl.innerHTML = `スコア：${state.score}<br>経過時間：${Math.floor(state.modeElapsed)}秒`;
+      }
+      if (resultOverlay) resultOverlay.classList.remove("hidden");
+      if (titleReturnButton) titleReturnButton.style.display = "none";
+      showMessage("ゲーム終了！");
+    }
+
     function createGround() {
       // 地面の見た目サイズです。FIELD_SIZEを変更するとマップ全体の広さを調整できます。
       // 後ろ2つの 16, 16 は分割数で、見た目の細かさに関係します。
@@ -1275,6 +1799,7 @@
       ground.rotation.x = -Math.PI / 2;
       ground.receiveShadow = true;
       scene.add(ground);
+      groundSystem.mainMesh = ground;
 
       // 物理地面は無限Planeではなく、有限のBoxにする。
       // これにより、外側の水色部分へ出た場合は落下する。
@@ -1289,11 +1814,13 @@
       groundBody.position.set(0, -0.1, 0);
       groundBody.allowSleep = false;
       world.addBody(groundBody);
+      groundSystem.mainBody = groundBody;
 
       const grid = new THREE.GridHelper(FIELD_SIZE, 48, 0xffffff, 0xffffff);
       grid.material.opacity = 0.12;
       grid.material.transparent = true;
       scene.add(grid);
+      groundSystem.mainGrid = grid;
     }
 
     function createBoundary() {
@@ -1405,12 +1932,16 @@
       body.updateAABB();
 
       // 固定オブジェクトの上に乗ったときもジャンプできるように、足場候補として保持する
-      staticPlatforms.push({
+      const platformInfo = {
         body,
         position: position.clone(),
         size: size.clone(),
         name
-      });
+      };
+      staticPlatforms.push(platformInfo);
+
+      // 境界壁以外の通常マップ用固定物は、タイムアタック開始時に取り除けるよう保持する。
+      staticBoxes.push({ mesh, body, platformInfo, name });
 
       return { mesh, body };
     }
@@ -1420,6 +1951,7 @@
     // y               : 白線の高さ。道路より少し上にします。
     // width/length    : 道路の幅と長さ
     function createRoadMarkings(centerX, y, centerZ, width, length) {
+      const markingMeshes = [];
       const lineMat = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
@@ -1444,6 +1976,7 @@
         dash.receiveShadow = false;
         dash.castShadow = false;
         scene.add(dash);
+        markingMeshes.push(dash);
       }
 
       // 中央線：道路幅のど真ん中に点線を置く
@@ -1457,6 +1990,8 @@
 
       addDash(leftEdgeX, centerZ, edgeLineWidth, length - 3.2);
       addDash(rightEdgeX, centerZ, edgeLineWidth, length - 3.2);
+
+      return markingMeshes;
     }
 
     function createTitleTexture() {
@@ -2391,11 +2926,12 @@
       road.position.set(-18, 0.04, 0);
       road.receiveShadow = true;
       scene.add(road);
+      roadVisualObjects.push(road);
 
       // 道路の白線
       // テクスチャ内の線だとUVの都合で中央からずれたり片側だけに見えるため、
       // 専用の薄いBoxを道路の上に配置して、中央線と左右端線を正確に出す。
-      createRoadMarkings(-18, 0.11, 0, 14, roadLength);
+      roadVisualObjects.push(...createRoadMarkings(-18, 0.11, 0, 14, roadLength));
 
       // スロープ
       // 第1引数が位置、第2引数がサイズです。Yを上げると高くなります。
@@ -3476,7 +4012,29 @@ createStaticBox(
       return new THREE.Vector3(rand(-62, 62), rand(14, 22), rand(-62, 62));
     }
 
+    function getRandomActiveTimeAttackSpawnHighPosition() {
+      const activeTiles = groundSystem.timeAttackTiles.filter((tile) => tile && !tile.removed);
+
+      if (activeTiles.length > 0) {
+        const tile = activeTiles[Math.floor(rand(0, activeTiles.length))];
+        const margin = groundSystem.tileSize * 0.32;
+        return new THREE.Vector3(
+          tile.mesh.position.x + rand(-margin, margin),
+          rand(16, 24),
+          tile.mesh.position.z + rand(-margin, margin)
+        );
+      }
+
+      // 万一すべて崩壊済みの場合は中央付近へ落とす。
+      return new THREE.Vector3(0, rand(16, 24), 0);
+    }
+
     function getRandomSpawnHighPosition() {
+      // タイムアタックでは、崩壊済みの地面へ追加オブジェクトや再スポーン対象が出ないようにする。
+      if (state.currentMode === "timeAttack" && groundSystem.timeAttackTiles.length > 0) {
+        return getRandomActiveTimeAttackSpawnHighPosition();
+      }
+
       return new THREE.Vector3(rand(-62, 62), rand(16, 24), rand(-62, 62));
     }
 
@@ -4505,6 +5063,26 @@ createStaticBox(
         if (event.target === missionOverlayEl) {
           closeMissionList();
         }
+      });
+
+      titleReturnButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        requestReturnToTitle();
+      });
+
+      returnYesButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        confirmReturnToTitle();
+      });
+
+      returnNoButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        cancelReturnToTitle();
+      });
+
+      resultTitleButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        requestReturnToTitle();
       });
 
       setupCameraDrag();
@@ -5582,6 +6160,10 @@ createStaticBox(
     ];
 
     function updateMission() {
+      if (state.currentMode !== "mission") {
+        return;
+      }
+
       let newlyCompleted = [];
 
       for (const mission of missions) {
@@ -5667,6 +6249,7 @@ createStaticBox(
     }
 
     function openMissionList() {
+      if (state.currentMode !== "mission") return;
       renderMissionList();
       missionOverlayEl.classList.remove("hidden");
     }
@@ -5975,24 +6558,38 @@ createStaticBox(
 
         updateBreakableSpawnProtection(obj, delta);
 
-        // 伝説の剣がマップ外へ落下した場合は、初期位置の真上から再出現させる。
-        // ランダム位置にはせず、必ず元の場所へ落ちてくるようにする。
+        // 伝説の剣がマップ外へ落下した場合は再出現させる。
+        // 通常/エンドレスでは初期位置の真上、タイムアタックでは崩壊していない地面のランダム位置へ戻す。
         if (obj.isLegendarySword && obj.body.position.y < FALL_RESET_Y) {
-          const base = obj.initialSpawnPosition || new THREE.Vector3(48, 11.25, 40);
-          const respawnY = base.y + (obj.respawnHeightOffset || 12);
+          const initialBase = obj.initialSpawnPosition || new THREE.Vector3(48, 11.25, 40);
+          let respawnPosition;
+          let respawnMessage;
+
+          if (state.currentMode === "timeAttack" && groundSystem.timeAttackTiles.length > 0) {
+            const activePos = getRandomActiveTimeAttackSpawnHighPosition();
+            respawnPosition = new THREE.Vector3(activePos.x, activePos.y, activePos.z);
+            respawnMessage = "伝説の剣が残っている地面に戻った！";
+          } else {
+            respawnPosition = new THREE.Vector3(
+              initialBase.x,
+              initialBase.y + (obj.respawnHeightOffset || 12),
+              initialBase.z
+            );
+            respawnMessage = "伝説の剣が元の場所に戻った！";
+          }
 
           if (state.lickTarget === obj) {
             releaseLick();
           }
 
-          obj.body.position.set(base.x, respawnY, base.z);
+          obj.body.position.set(respawnPosition.x, respawnPosition.y, respawnPosition.z);
           obj.body.velocity.set(0, 0, 0);
           obj.body.angularVelocity.set(0, 0, 0);
           obj.body.force.set(0, 0, 0);
           obj.body.torque.set(0, 0, 0);
           obj.body.quaternion.set(0, 0, 0, 1);
           obj.body.wakeUp();
-          showMessage("伝説の剣が元の場所に戻った！");
+          showMessage(respawnMessage);
         }
 
         // 破壊可能オブジェクトがマップ外へ落下した場合は、
@@ -6047,15 +6644,19 @@ createStaticBox(
 
       window.addEventListener("resize", onResize);
 
-      startButton.addEventListener("pointerdown", () => {
-        startOverlay.style.display = "none";
-        state.started = true;
+      missionModeButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGameMode("mission");
+      });
 
-        // ゲーム開始直後、空中配置オブジェクトが地面に落ちるまでの間は
-        // 衝突破壊・衝突スコアを発生させない
-        state.startProtectionTimer = 3.0;
+      timeAttackModeButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGameMode("timeAttack");
+      });
 
-        showMessage("ゲーム開始！準備中...");
+      endlessModeButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGameMode("endless");
       });
 
       animate();
@@ -6099,6 +6700,7 @@ createStaticBox(
         updateSpawnButton(delta);
         updateJumpPads(delta);
         updateCannons(delta);
+        updateSpecialMode(delta);
         cleanupTooManyDebris();
 
         world.step(fixedTimeStep, delta, maxSubSteps);
@@ -6106,10 +6708,14 @@ createStaticBox(
         syncObjects(delta);
         animateNPCMeshes(delta);
 
-        // プレイヤーが落ちたら復帰
+        // プレイヤーが落ちたら復帰。タイムアタックで中央マス崩壊後に落下した場合はゲーム終了。
         if (player.body.position.y < FALL_RESET_Y) {
-          resetPlayer();
-          showMessage("落下！初期位置に戻りました");
+          if (state.currentMode === "timeAttack" && state.centerGroundCollapsed) {
+            showTimeAttackResult();
+          } else {
+            resetPlayer();
+            showMessage("落下！初期位置に戻りました");
+          }
         }
       } else {
         updateCamera(delta);
