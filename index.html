@@ -442,7 +442,7 @@
 
     #missionModeButton { background: #4caf50; }
     #timeAttackModeButton { background: #f4511e; }
-    #endlessModeButton { background: #3f51b5; }
+    #bakaModeButton { background: #9c27b0; }
 
     #titleReturnButton {
       position: fixed;
@@ -709,8 +709,8 @@
       </p>
       <button id="missionModeButton" class="modeButton">ミッション モード</button>
       <button id="timeAttackModeButton" class="modeButton">タイムアタック モード</button>
-      <button id="endlessModeButton" class="modeButton">エンドレス モード</button>
-      <div id="versionText">Ver.1.3.3</div>
+      <button id="bakaModeButton" class="modeButton">バカゲー モード</button>
+      <div id="versionText">Ver.1.3.4</div>
     </div>
   </div>
 
@@ -804,7 +804,7 @@
     const startOverlay = document.getElementById("startOverlay");
     const missionModeButton = document.getElementById("missionModeButton");
     const timeAttackModeButton = document.getElementById("timeAttackModeButton");
-    const endlessModeButton = document.getElementById("endlessModeButton");
+    const bakaModeButton = document.getElementById("bakaModeButton");
     const titleReturnButton = document.getElementById("titleReturnButton");
     const returnConfirmOverlay = document.getElementById("returnConfirmOverlay");
     const returnYesButton = document.getElementById("returnYesButton");
@@ -1055,6 +1055,47 @@
 
     function incrementCounterMap(map, key, amount = 1) {
       map[key] = (map[key] || 0) + amount;
+    }
+
+    function isBakaMode() {
+      return state.currentMode === "baka";
+    }
+
+    function isMissionLikeMode() {
+      return state.currentMode === "mission" || state.currentMode === "baka";
+    }
+
+    // バカゲーモード専用倍率です。
+    // 既存モードの挙動を変えないように、用途ごとに倍率を分けています。
+    function getBakaModePlayerMoveMultiplier() {
+      return isBakaMode() ? 2 : 1;
+    }
+
+    function getBakaModeDashMultiplier() {
+      return isBakaMode() ? 5 : 1;
+    }
+
+    function getBakaModeHeadbuttMultiplier() {
+      return isBakaMode() ? 5 : 1;
+    }
+
+    function getBakaModeJumpMultiplier() {
+      return isBakaMode() ? 2 : 1;
+    }
+
+    function getBakaModeNPCSpeedMultiplier(npc) {
+      if (!isBakaMode()) return 1;
+      if (npc && npc.npcType === "rabbit") return 5;
+      if (npc && (npc.npcType === "human" || npc.npcType === "dog")) return 10;
+      return 1;
+    }
+
+    function getBakaModeNPCRangeMultiplier() {
+      return isBakaMode() ? 5 : 1;
+    }
+
+    function getBakaModeSpawnCount() {
+      return isBakaMode() ? 5 : 1;
     }
 
     function showMessage(text) {
@@ -1492,7 +1533,7 @@
     // =========================================================
 
     function hideMissionUIForMode() {
-      const missionEnabled = state.currentMode === "mission";
+      const missionEnabled = isMissionLikeMode();
       missionPanelEl.style.display = missionEnabled ? "block" : "none";
       if (!missionEnabled) {
         missionOverlayEl.classList.add("hidden");
@@ -1503,20 +1544,15 @@
     function updateModeStatusText() {
       if (!modeStatusPanelEl) return;
 
-      if (!state.started || state.currentMode === "mission") {
+      if (!state.started || state.currentMode !== "timeAttack") {
         modeStatusPanelEl.style.display = "none";
         return;
       }
 
       modeStatusPanelEl.style.display = "block";
-      if (state.currentMode === "timeAttack") {
-        const nextSpawn = Math.max(0, Math.ceil(state.periodicSpawnTimer));
-        const nextCollapse = Math.max(0, Math.ceil(state.groundCollapseTimer));
-        modeStatusPanelEl.innerHTML = `TIME ATTACK<br>経過 ${Math.floor(state.modeElapsed)}秒<br>次の落下 ${nextSpawn}秒 / 地面崩壊 ${nextCollapse}秒`;
-      } else if (state.currentMode === "endless") {
-        const nextSpawn = Math.max(0, Math.ceil(state.periodicSpawnTimer));
-        modeStatusPanelEl.innerHTML = `ENDLESS<br>経過 ${Math.floor(state.modeElapsed)}秒<br>次の落下 ${nextSpawn}秒`;
-      }
+      const nextSpawn = Math.max(0, Math.ceil(state.periodicSpawnTimer));
+      const nextCollapse = Math.max(0, Math.ceil(state.groundCollapseTimer));
+      modeStatusPanelEl.innerHTML = `TIME ATTACK<br>経過 ${Math.floor(state.modeElapsed)}秒<br>次の落下 ${nextSpawn}秒 / 地面崩壊 ${nextCollapse}秒`;
     }
 
     function requestReturnToTitle() {
@@ -1773,8 +1809,8 @@
       state.started = true;
       state.gameOver = false;
       state.modeElapsed = 0;
-      state.periodicSpawnTimer = mode === "timeAttack" ? 10.0 : 5.0;
-      state.groundCollapseTimer = mode === "timeAttack" ? 10.0 : 5.0;
+      state.periodicSpawnTimer = mode === "timeAttack" ? 10.0 : 0;
+      state.groundCollapseTimer = mode === "timeAttack" ? 10.0 : 0;
       state.groundCollapseLayer = 0;
       state.centerGroundCollapsed = false;
       state.startProtectionTimer = 3.0;
@@ -1791,11 +1827,13 @@
         removeTimeAttackUnusedGimmicks();
         createTimeAttackGroundTiles();
         // 既存の初期配置に加えて、通常の約5倍相当になる量の破壊可能オブジェクトを空から投入する。
-        // 以前は約10倍相当だったため、負荷と画面密度を抑える。
         spawnBreakableRain(64 * 4);
         showMessage("タイムアタック開始！壊しまくれ！");
-      } else if (mode === "endless") {
-        showMessage("エンドレスモード開始！好きなだけ暴れよう！");
+      } else if (mode === "baka") {
+        applyBakaModeToExistingNPCs();
+        spawnBreakableRain(64 * 4);
+        updateMission();
+        showMessage("バカゲーモード開始！速度と威力アップで暴れよう！");
       }
 
       updateModeStatusText();
@@ -1803,29 +1841,24 @@
 
     function updateSpecialMode(delta) {
       if (!state.started || state.gameOver) return;
-      if (state.currentMode !== "timeAttack" && state.currentMode !== "endless") return;
+      if (state.currentMode !== "timeAttack") return;
 
       state.modeElapsed += delta;
       state.periodicSpawnTimer -= delta;
 
       if (state.periodicSpawnTimer <= 0) {
         spawnBreakableRain(10);
-        state.periodicSpawnTimer += state.currentMode === "timeAttack" ? 10.0 : 5.0;
+        state.periodicSpawnTimer += 10.0;
         showMessage("破壊可能オブジェクトが落下！");
       }
 
-      if (state.currentMode === "timeAttack") {
-        state.groundCollapseTimer -= delta;
-        if (state.groundCollapseTimer <= 0) {
-          collapseNextGroundRing();
-          state.groundCollapseTimer += 10.0;
-        }
+      state.groundCollapseTimer -= delta;
+      if (state.groundCollapseTimer <= 0) {
+        collapseNextGroundRing();
+        state.groundCollapseTimer += 10.0;
       }
 
-      if (state.currentMode === "timeAttack") {
-        wakeObjectsOverCollapsedTimeAttackGround();
-      }
-
+      wakeObjectsOverCollapsedTimeAttackGround();
       updateModeStatusText();
     }
 
@@ -2544,20 +2577,34 @@
     // 灰色高台のボタンを押した時の出現処理です。
     // 破壊可能オブジェクト85%、NPC15%（人5%、犬5%、ウサギ5%）の割合です。
     function spawnFromButton() {
-      const r = Math.random();
+      const spawnCount = getBakaModeSpawnCount();
+      const spawnedNames = [];
 
-      if (r < 0.85) {
-        spawnRandomBreakableFromSky();
-        showMessage("ボタン効果 ： オブジェクト 出現！");
-      } else if (r < 0.90) {
-        spawnRandomNPCFromSky("human");
-        showMessage("ボタン効果 ： 人 が 出現！");
-      } else if (r < 0.95) {
-        spawnRandomNPCFromSky("dog");
-        showMessage("ボタン効果 ： 犬 が 出現！");
+      for (let i = 0; i < spawnCount; i++) {
+        const r = Math.random();
+        let spawned;
+
+        if (r < 0.85) {
+          spawned = spawnRandomBreakableFromSky();
+        } else if (r < 0.90) {
+          spawned = spawnRandomNPCFromSky("human");
+        } else if (r < 0.95) {
+          spawned = spawnRandomNPCFromSky("dog");
+        } else {
+          spawned = spawnRandomNPCFromSky("rabbit");
+        }
+
+        if (spawned && spawned.name) {
+          spawnedNames.push(spawned.name);
+        }
+      }
+
+      const uniqueNames = [...new Set(spawnedNames)];
+      if (spawnCount === 1) {
+        showMessage(`ボタン効果 ： ${uniqueNames[0] || "オブジェクト"} が 出現！`);
       } else {
-        spawnRandomNPCFromSky("rabbit");
-        showMessage("ボタン効果 ： ウサギ が 出現！");
+        const nameText = uniqueNames.slice(0, 4).join("・") + (uniqueNames.length > 4 ? " など" : "");
+        showMessage(`ボタン効果 ： ${nameText || "オブジェクト"} が ${spawnCount}個/体 出現！`);
       }
     }
 
@@ -3873,6 +3920,21 @@ createStaticBox(
       return group;
     }
 
+    function applyBakaModeToNPC(npc) {
+      if (!npc || npc.bakaModeBoosted) return;
+
+      npc.speed *= getBakaModeNPCSpeedMultiplier(npc);
+      npc.wanderRadius *= getBakaModeNPCRangeMultiplier();
+      npc.bakaModeBoosted = true;
+      chooseNewNPCTarget(npc);
+    }
+
+    function applyBakaModeToExistingNPCs() {
+      for (const npc of npcs) {
+        applyBakaModeToNPC(npc);
+      }
+    }
+
     // NPCを作る共通関数です.
     // type: "human" または "dog"、speedで移動速度、wanderRadiusで歩き回る範囲を調整します。
     function createNPC(options) {
@@ -3976,6 +4038,9 @@ createStaticBox(
       });
 
       chooseNewNPCTarget(npc);
+      if (isBakaMode()) {
+        applyBakaModeToNPC(npc);
+      }
 
       return npc;
     }
@@ -4047,14 +4112,14 @@ createStaticBox(
 
       const x = clamp(
         npc.home.x + Math.cos(angle) * distance,
-        -46,
-        46
+        -FIELD_HALF_SIZE + 6,
+        FIELD_HALF_SIZE - 6
       );
 
       const z = clamp(
         npc.home.z + Math.sin(angle) * distance,
-        -46,
-        46
+        -FIELD_HALF_SIZE + 6,
+        FIELD_HALF_SIZE - 6
       );
 
       npc.target.set(x, 0, z);
@@ -5335,7 +5400,7 @@ createStaticBox(
         move.normalize();
 
         // 移動速度です。左がダッシュ中、右が通常時です。
-      const speed = state.dashTime > 0 ? 15.2 : 10.8;
+      const speed = (state.dashTime > 0 ? 15.2 : 10.8) * getBakaModePlayerMoveMultiplier();
         const targetVX = move.x * speed;
         const targetVZ = move.z * speed;
 
@@ -5351,7 +5416,7 @@ createStaticBox(
           // 接地中に速度が極端に落ちた場合の最低移動補助
           const horizontalSpeed = Math.hypot(player.body.velocity.x, player.body.velocity.z);
           // 地面で摩擦に負けないための最低速度です。
-      const minGroundSpeed = state.dashTime > 0 ? 7.5 : 5.8;
+      const minGroundSpeed = (state.dashTime > 0 ? 7.5 : 5.8) * getBakaModePlayerMoveMultiplier();
 
           if (horizontalSpeed < minGroundSpeed) {
             player.body.velocity.x = move.x * minGroundSpeed;
@@ -5468,7 +5533,7 @@ createStaticBox(
       player.body.wakeUp();
 
       // 現在の落下/上昇速度に左右されにくいように、Y速度を直接設定する
-      player.body.velocity.y = 8.4;
+      player.body.velocity.y = 8.4 * getBakaModeJumpMultiplier();
 
       state.jumpCooldown = 0.28;
       // addScore(2, player.mesh.position); ←※ジャンプでスコア2加算されていたので削除
@@ -5484,7 +5549,7 @@ createStaticBox(
 
       const dir = new THREE.Vector3(Math.sin(player.visualYaw), 0, Math.cos(player.visualYaw));
       player.body.applyImpulse(
-        new CANNON.Vec3(dir.x * 8, 1.0, dir.z * 8),
+        new CANNON.Vec3(dir.x * 8 * getBakaModeDashMultiplier(), 1.0 * getBakaModeDashMultiplier(), dir.z * 8 * getBakaModeDashMultiplier()),
         player.body.position
       );
 
@@ -5537,7 +5602,7 @@ createStaticBox(
           hitSomething = true;
 
           // 基本吹き飛ばし力です。近いほど強くなります。
-      const impulsePower = 10 + Math.max(0, 4.2 - distance) * 3.5;
+      const impulsePower = (10 + Math.max(0, 4.2 - distance) * 3.5) * getBakaModeHeadbuttMultiplier();
           obj.body.wakeUp();
 
         if (obj.isNPC) {
@@ -6217,7 +6282,7 @@ createStaticBox(
     ];
 
     function updateMission() {
-      if (state.currentMode !== "mission") {
+      if (!isMissionLikeMode()) {
         return;
       }
 
@@ -6310,7 +6375,7 @@ createStaticBox(
     }
 
     function openMissionList() {
-      if (state.currentMode !== "mission") return;
+      if (!isMissionLikeMode()) return;
       renderMissionList();
       missionOverlayEl.classList.remove("hidden");
     }
@@ -6620,7 +6685,7 @@ createStaticBox(
         updateBreakableSpawnProtection(obj, delta);
 
         // 伝説の剣がマップ外へ落下した場合は再出現させる。
-        // 通常/エンドレスでは初期位置の真上、タイムアタックでは崩壊していない地面のランダム位置へ戻す。
+        // 通常/バカゲーでは初期位置の真上、タイムアタックでは崩壊していない地面のランダム位置へ戻す。
         if (obj.isLegendarySword && obj.body.position.y < FALL_RESET_Y) {
           const initialBase = obj.initialSpawnPosition || new THREE.Vector3(48, 11.25, 40);
           let respawnPosition;
@@ -6715,9 +6780,9 @@ createStaticBox(
         startGameMode("timeAttack");
       });
 
-      endlessModeButton.addEventListener("pointerdown", (event) => {
+      bakaModeButton.addEventListener("pointerdown", (event) => {
         event.preventDefault();
-        startGameMode("endless");
+        startGameMode("baka");
       });
 
       animate();
