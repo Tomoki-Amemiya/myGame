@@ -550,7 +550,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
-      <div id="versionText">Ver.1.2.2</div>
+      <div id="versionText">Ver.1.2.3</div>
     </div>
   </div>
 
@@ -1555,8 +1555,8 @@
         mesh: group,
         body,
         size: new THREE.Vector3(5, 5, 0.6),
-        hp: 5000,
-        maxHp: 5000,
+        hp: 3500,
+        maxHp: 3500,
         score: 1000,
         name: "ゲームタイトル看板",
         breakable: true,
@@ -2998,7 +2998,7 @@ createStaticBox(
 
       const parts = {};
 
-      const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.55, 0.55), bodyMat);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 1.15), bodyMat);
       body.position.set(0, 0.38, 0);
       body.castShadow = true;
       body.receiveShadow = true;
@@ -3051,10 +3051,10 @@ createStaticBox(
         return pivot;
       }
 
-      parts.frontLeftLegPivot = makeDogLegPivot(-0.38, -0.25);
-      parts.frontRightLegPivot = makeDogLegPivot(0.38, -0.25);
-      parts.backLeftLegPivot = makeDogLegPivot(-0.38, 0.25);
-      parts.backRightLegPivot = makeDogLegPivot(0.38, 0.25);
+      parts.frontLeftLegPivot = makeDogLegPivot(-0.25, -0.38);
+      parts.frontRightLegPivot = makeDogLegPivot(0.25, -0.38);
+      parts.backLeftLegPivot = makeDogLegPivot(-0.25, 0.38);
+      parts.backRightLegPivot = makeDogLegPivot(0.25, 0.38);
 
       const tail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.55), bodyMat);
       tail.position.set(0, 0.58, 0.65);
@@ -3149,7 +3149,7 @@ createStaticBox(
         isWalking: false,
 
         // NPCの見た目だけ上下補正する
-        visualYOffset: isDog ? -0.16 : -0.18
+        visualYOffset: isDog ? -0.16 : -0.30
       };
 
       body.userData = npc;
