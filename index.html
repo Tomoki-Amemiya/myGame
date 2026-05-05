@@ -550,7 +550,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
-      <div id="versionText">Ver.1.2.5</div>
+      <div id="versionText">Ver.1.2.6</div>
     </div>
   </div>
 
@@ -749,6 +749,7 @@
       legendaryPowerHeadbuttCount: 0,
       cannonLaunchByName: {},
       legendaryPowerHeadbuttByName: {},
+      rabbitCaptureCount: 0,
 
       // 画面中央メッセージの表示残り時間。秒単位です。
       messageTimer: 0
@@ -843,97 +844,47 @@
       state.messageTimer = 1.8;
     }
 
-    // ミッション達成トーストを順番に表示するためのキューです。
-    // 通常ミッションと隠しミッションが同時・連続で達成された場合でも、
-    // 後から表示された通知が前の通知の setTimeout に消されないようにする。
-    let missionToastQueue = [];
-    let missionToastShowing = false;
-    let missionToastTimerId = null;
-
-    function enqueueMissionToast(toast) {
+    function showMissionClearToast(title, reward, count = 1) {
       if (!missionClearToastEl) return;
 
-      // 隠しミッションは、まだ表示待ちの通常ミッションより前に入れる。
-      // ただし、現在表示中のトーストは途中で消さず、表示完了後に続けて出す。
-      if (toast.secret) {
-        const firstNormalIndex = missionToastQueue.findIndex((item) => !item.secret);
-        if (firstNormalIndex >= 0) {
-          missionToastQueue.splice(firstNormalIndex, 0, toast);
-        } else {
-          missionToastQueue.push(toast);
-        }
-      } else {
-        missionToastQueue.push(toast);
-      }
+      const titleText = count > 1
+        ? `MISSION CLEAR x${count}`
+        : `MISSION CLEAR`;
 
-      processMissionToastQueue();
-    }
+      missionClearToastEl.classList.remove("secretMissionToast");
+      missionClearToastEl.innerHTML = `
+        <div>${titleText}</div>
+        <div>${title}</div>
+        <div class="small">追加報酬 +${reward}</div>
+      `;
 
-    function processMissionToastQueue() {
-      if (!missionClearToastEl || missionToastShowing) return;
+      missionClearToastEl.classList.add("show");
 
-      const toast = missionToastQueue.shift();
-      if (!toast) return;
-
-      missionToastShowing = true;
-
-      const titleText = toast.count > 1
-        ? `${toast.prefix} x${toast.count}`
-        : toast.prefix;
-
-      missionClearToastEl.classList.remove("show");
-      missionClearToastEl.classList.toggle("secretMissionToast", !!toast.secret);
-
-      missionClearToastEl.innerHTML = toast.secret
-        ? `
-          <div>㊙ ${titleText} ㊙</div>
-          <div>${toast.title}</div>
-          <div class="small">隠しミッション達成！ 追加報酬 +${toast.reward}</div>
-        `
-        : `
-          <div>${titleText}</div>
-          <div>${toast.title}</div>
-          <div class="small">追加報酬 +${toast.reward}</div>
-        `;
-
-      window.setTimeout(() => {
-        missionClearToastEl.classList.add("show");
-      }, 20);
-
-      if (missionToastTimerId) {
-        clearTimeout(missionToastTimerId);
-      }
-
-      const duration = toast.secret ? 3400 : 2600;
-      missionToastTimerId = setTimeout(() => {
+      setTimeout(() => {
         missionClearToastEl.classList.remove("show");
-
-        setTimeout(() => {
-          missionClearToastEl.classList.remove("secretMissionToast");
-          missionToastShowing = false;
-          processMissionToastQueue();
-        }, 220);
-      }, duration);
-    }
-
-    function showMissionClearToast(title, reward, count = 1) {
-      enqueueMissionToast({
-        secret: false,
-        prefix: "MISSION CLEAR",
-        title,
-        reward,
-        count
-      });
+      }, 2600);
     }
 
     function showSecretMissionClearToast(title, reward, count = 1) {
-      enqueueMissionToast({
-        secret: true,
-        prefix: "SECRET MISSION CLEAR",
-        title,
-        reward,
-        count
-      });
+      if (!missionClearToastEl) return;
+
+      const titleText = count > 1
+        ? `SECRET MISSION CLEAR x${count}`
+        : `SECRET MISSION CLEAR`;
+
+      missionClearToastEl.innerHTML = `
+        <div>㊙ ${titleText} ㊙</div>
+        <div>${title}</div>
+        <div class="small">隠しミッション達成！ 追加報酬 +${reward}</div>
+      `;
+
+      missionClearToastEl.classList.add("secretMissionToast");
+      missionClearToastEl.classList.add("show");
+
+      setTimeout(() => {
+        missionClearToastEl.classList.remove("show");
+        missionClearToastEl.classList.remove("secretMissionToast");
+      }, 3400);
     }
 
     function updateMessage(delta) {
@@ -1450,15 +1401,12 @@
         addDash(centerX, z + dashLength / 2, centerLineWidth, dashLength);
       }
 
-      // 左右端線：道路の両端は白い実線にする。
-      // 中央線だけは上の処理で点線のまま残す。
+      // 左右端線：道路の両端だけは白い実線にする
       const leftEdgeX = centerX - width / 2 + edgeInset;
       const rightEdgeX = centerX + width / 2 - edgeInset;
-      const edgeLineLength = endZ - startZ;
-      const edgeLineCenterZ = (startZ + endZ) / 2;
 
-      addDash(leftEdgeX, edgeLineCenterZ, edgeLineWidth, edgeLineLength);
-      addDash(rightEdgeX, edgeLineCenterZ, edgeLineWidth, edgeLineLength);
+      addDash(leftEdgeX, centerZ, edgeLineWidth, length - 3.2);
+      addDash(rightEdgeX, centerZ, edgeLineWidth, length - 3.2);
     }
 
     function createTitleTexture() {
@@ -1890,7 +1838,7 @@
         });
         obj.explosive = true;
       // 0.94〜1.00 : 家を出す割合です。
-      // spawnFromButton側の「破壊可能オブジェクト70%」の中に含めるため、
+      // spawnFromButton側の「破壊可能オブジェクト85%」の中に含めるため、
       // ボタン全体の 人15%・犬15% の割合は変更しない。
       } else {
         obj = createDynamicBox({
@@ -1924,7 +1872,20 @@
           radius: 0.45,
           height: 0.9,
           speed: rand(5.0, 5.8),
-          wanderRadius: rand(10, 14)
+          wanderRadius: rand(20, 28)
+        });
+      }
+
+      if (type === "rabbit") {
+        return createNPC({
+          type: "rabbit",
+          name: "ウサギ",
+          position,
+          color: Math.random() < 0.5 ? 0xf6f0df : 0xd9c8a8,
+          radius: 0.38,
+          height: 0.75,
+          speed: rand(8.8, 10.2),
+          wanderRadius: rand(30, 40)
         });
       }
 
@@ -1934,24 +1895,27 @@
         position,
         color: [0x4f8cff, 0xff7a7a, 0x8be06a, 0xffc857][Math.floor(rand(0, 4))],
         speed: rand(3.9, 4.6),
-        wanderRadius: rand(10, 13)
+        wanderRadius: rand(20, 26)
       });
     }
 
     // 灰色高台のボタンを押した時の出現処理です。
-    // 破壊可能オブジェクト70%、人15%、犬15%の割合です。
+    // 破壊可能オブジェクト85%、NPC15%（人5%、犬5%、ウサギ5%）の割合です。
     function spawnFromButton() {
       const r = Math.random();
 
-      if (r < 0.70) {
+      if (r < 0.85) {
         spawnRandomBreakableFromSky();
         showMessage("ボタン効果 ： オブジェクト 出現！");
-      } else if (r < 0.85) {
+      } else if (r < 0.90) {
         spawnRandomNPCFromSky("human");
         showMessage("ボタン効果 ： 人 が 出現！");
-      } else {
+      } else if (r < 0.95) {
         spawnRandomNPCFromSky("dog");
         showMessage("ボタン効果 ： 犬 が 出現！");
+      } else {
+        spawnRandomNPCFromSky("rabbit");
+        showMessage("ボタン効果 ： ウサギ が 出現！");
       }
     }
 
@@ -2080,6 +2044,7 @@
         return target.obj.size.y / 2;
       }
       if (target.obj && target.obj.npcType === "dog") return 0.48;
+      if (target.obj && target.obj.npcType === "rabbit") return 0.42;
       if (target.obj && target.obj.npcType === "human") return 0.95;
       return 0.8;
     }
@@ -2091,6 +2056,7 @@
         return Math.max(target.obj.size.x || 0.8, target.obj.size.z || 0.8) / 2;
       }
       if (target.obj && target.obj.npcType === "dog") return 0.55;
+      if (target.obj && target.obj.npcType === "rabbit") return 0.5;
       if (target.obj && target.obj.npcType === "human") return 0.55;
       return 0.7;
     }
@@ -2111,19 +2077,12 @@
     function getCannonLaunchTargets() {
       const breakableTargets = destructibles
         .filter((obj) => obj && obj.body && !obj.destroyed && obj.breakable)
-        .map((obj) => ({ obj, body: obj.body, isPlayer: false, isBreakable: true, isObjectTarget: true, name: obj.name }));
-
-      // 伝説の剣・ジャンプ台も大砲に入れて発射できる対象に含める。
-      // どちらも破壊不能なので destructibles には含まれないため、gameObjects側から拾う。
-      const gimmickTargets = gameObjects
-        .filter((obj) => obj && obj.body && !obj.destroyed && !obj.isCannon && (obj.isLegendarySword || obj.visualType === "jumpPad"))
-        .map((obj) => ({ obj, body: obj.body, isPlayer: false, isObjectTarget: true, name: obj.name }));
+        .map((obj) => ({ obj, body: obj.body, isPlayer: false, isBreakable: true, name: obj.name }));
 
       return [
         { obj: player, body: player.body, isPlayer: true, name: "自キャラ" },
         ...npcs.map((npc) => ({ obj: npc, body: npc.body, isPlayer: false, name: npc.name })),
-        ...breakableTargets,
-        ...gimmickTargets
+        ...breakableTargets
       ];
     }
 
@@ -2141,8 +2100,8 @@
       const verticalDistance = Math.abs(pos.y - mouth.y);
 
       // 自キャラ/NPCは中心が口元に入ったら反応。
-      // 破壊可能オブジェクト・伝説の剣・ジャンプ台はサイズ差があるため、中心だけでなく底面も考慮する。
-      if (target.isBreakable || target.isObjectTarget) {
+      // 破壊可能オブジェクトはサイズが大きいものもあるため、中心だけでなく底面も考慮する。
+      if (target.isBreakable) {
         return horizontalDistance < 1.15 + Math.min(radius, 1.6) && bottomY < mouth.y + 1.1 && pos.y > mouth.y - 0.6;
       }
 
@@ -2200,11 +2159,6 @@
         target.body.velocity.set(launchDir.x * 56, 36, launchDir.z * 56);
         target.body.angularVelocity.set(rand(-3, 3), rand(-6, 6), rand(-3, 3));
         target.body.wakeUp();
-
-        // ベロで掴んだまま大砲発射すると、ベロの引っ張り処理で発射が弱まるため解除する。
-        if (target.obj && state.lickTarget === target.obj) {
-          releaseLick();
-        }
 
         if (target.isPlayer) {
           state.cannonLaunchCount += 1;
@@ -3175,7 +3129,96 @@ createStaticBox(
       return group;
     }
 
-    // NPCを作る共通関数です。
+    function createRabbitMesh(color = 0xf6f0df) {
+      const group = new THREE.Group();
+
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.68
+      });
+
+      const earMat = new THREE.MeshStandardMaterial({
+        color: 0xffc8d8,
+        roughness: 0.72
+      });
+
+      const darkMat = new THREE.MeshStandardMaterial({
+        color: 0x2d241b,
+        roughness: 0.8
+      });
+
+      const parts = {};
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.48, 0.88), bodyMat);
+      body.position.set(0, 0.35, 0.05);
+      body.castShadow = true;
+      body.receiveShadow = true;
+      group.add(body);
+      parts.body = body;
+
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.42, 0.44), bodyMat);
+      head.position.set(0, 0.58, -0.52);
+      head.castShadow = true;
+      head.receiveShadow = true;
+      group.add(head);
+      parts.head = head;
+
+      const nose = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.12), earMat);
+      nose.position.set(0, 0.56, -0.78);
+      nose.castShadow = true;
+      group.add(nose);
+      parts.nose = nose;
+
+      const earGeo = new THREE.BoxGeometry(0.13, 0.72, 0.1);
+      const leftEar = new THREE.Mesh(earGeo, bodyMat);
+      leftEar.position.set(-0.16, 1.03, -0.52);
+      leftEar.rotation.z = 0.12;
+      leftEar.rotation.x = -0.12;
+      leftEar.castShadow = true;
+      group.add(leftEar);
+
+      const rightEar = new THREE.Mesh(earGeo, bodyMat);
+      rightEar.position.set(0.16, 1.03, -0.52);
+      rightEar.rotation.z = -0.12;
+      rightEar.rotation.x = -0.12;
+      rightEar.castShadow = true;
+      group.add(rightEar);
+
+      parts.leftEar = leftEar;
+      parts.rightEar = rightEar;
+
+      function makeRabbitLegPivot(x, z, back = false) {
+        const pivot = new THREE.Group();
+        pivot.position.set(x, back ? 0.26 : 0.24, z);
+
+        const leg = new THREE.Mesh(
+          new THREE.BoxGeometry(back ? 0.18 : 0.13, back ? 0.34 : 0.28, back ? 0.18 : 0.13),
+          darkMat
+        );
+        leg.position.set(0, back ? -0.17 : -0.14, 0);
+        leg.castShadow = true;
+
+        pivot.add(leg);
+        group.add(pivot);
+        return pivot;
+      }
+
+      parts.frontLeftLegPivot = makeRabbitLegPivot(-0.22, -0.28, false);
+      parts.frontRightLegPivot = makeRabbitLegPivot(0.22, -0.28, false);
+      parts.backLeftLegPivot = makeRabbitLegPivot(-0.25, 0.35, true);
+      parts.backRightLegPivot = makeRabbitLegPivot(0.25, 0.35, true);
+
+      const tail = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8), bodyMat);
+      tail.position.set(0, 0.48, 0.56);
+      tail.castShadow = true;
+      group.add(tail);
+      parts.tail = tail;
+
+      group.userData.parts = parts;
+      return group;
+    }
+
+    // NPCを作る共通関数です.
     // type: "human" または "dog"、speedで移動速度、wanderRadiusで歩き回る範囲を調整します。
     function createNPC(options) {
       const {
@@ -3190,16 +3233,21 @@ createStaticBox(
       } = options;
 
       const isDog = type === "dog";
+      const isRabbit = type === "rabbit";
 
       const mesh = isDog
         ? createDogMesh(color)
-        : createHumanMesh(color);
+        : isRabbit
+          ? createRabbitMesh(color)
+          : createHumanMesh(color);
 
       // NPCの物理判定を球ではなく箱にする
       // 球だと地面で転がる/浮く/引っかかるように見えやすいため
       const bodySize = isDog
         ? new THREE.Vector3(0.9, 0.7, 1.1)
-        : new THREE.Vector3(0.75, 1.55, 0.75);
+        : isRabbit
+          ? new THREE.Vector3(0.72, 0.62, 0.92)
+          : new THREE.Vector3(0.75, 1.55, 0.75);
 
       const spawnY = position.y > 1
         ? position.y
@@ -3211,7 +3259,7 @@ createStaticBox(
       scene.add(mesh);
 
       const body = new CANNON.Body({
-        mass: isDog ? 1.4 : 2.4,
+        mass: isDog ? 1.4 : (isRabbit ? 0.95 : 2.4),
         material: defaultMaterial,
         linearDamping: 0.05,
         angularDamping: 0.95,
@@ -3256,7 +3304,8 @@ createStaticBox(
         isWalking: false,
 
         // NPCの見た目だけ上下補正する
-        visualYOffset: isDog ? -0.16 : -0.30,
+        visualYOffset: isRabbit ? -0.13 : (isDog ? -0.16 : -0.30),
+        hopCooldown: rand(0.05, 0.35),
 
         // 大砲で飛ばされた後、着地するまで自律歩行を止めるための状態
         cannonAirborneLock: false,
@@ -3422,11 +3471,13 @@ createStaticBox(
     // wanderRadiusを大きくすると、より広い範囲を歩きます。
     function createNPCs() {
       const npcConfigs = [
-        { type: "human", name: "人", color: 0x4f8cff, speed: 4.2, wanderRadius: 12 },
-        { type: "human", name: "人", color: 0xff7a7a, speed: 4.0, wanderRadius: 12 },
-        { type: "human", name: "人", color: 0x8be06a, speed: 4.4, wanderRadius: 11 },
-        { type: "dog", name: "犬", color: 0xb07a45, radius: 0.45, height: 0.9, speed: 5.4, wanderRadius: 13 },
-        { type: "dog", name: "犬", color: 0xd6b17a, radius: 0.45, height: 0.9, speed: 5.1, wanderRadius: 12 }
+        { type: "human", name: "人", color: 0x4f8cff, speed: 4.2, wanderRadius: 24 },
+        { type: "human", name: "人", color: 0xff7a7a, speed: 4.0, wanderRadius: 24 },
+        { type: "human", name: "人", color: 0x8be06a, speed: 4.4, wanderRadius: 22 },
+        { type: "dog", name: "犬", color: 0xb07a45, radius: 0.45, height: 0.9, speed: 5.4, wanderRadius: 26 },
+        { type: "dog", name: "犬", color: 0xd6b17a, radius: 0.45, height: 0.9, speed: 5.1, wanderRadius: 24 },
+        { type: "rabbit", name: "ウサギ", color: 0xf6f0df, radius: 0.38, height: 0.75, speed: 9.2, wanderRadius: 36 },
+        { type: "rabbit", name: "ウサギ", color: 0xd9c8a8, radius: 0.38, height: 0.75, speed: 10.0, wanderRadius: 40 }
       ];
 
       for (const config of npcConfigs) {
@@ -3588,8 +3639,6 @@ createStaticBox(
         colorHex: 0x77ddff,
         destroyed: false,
         isLegendarySword: true,
-        initialSpawnPosition: position.clone(),
-        respawnHeightOffset: 12,
         visualYOffset: 0,
         lastHitTime: 0
       };
@@ -3877,12 +3926,9 @@ createStaticBox(
       if (visualType === "jumpPad") {
         obj.isJumpPad = true;
         obj.jumpPadCooldown = 0;
-        // スポーン時は上向きのまま出すが、その後は他の物体と同じく物理演算で回転させる。
-        // fixedRotation=true のままだと、大砲で発射した後に斜め向きで固定されることがあるため解除する。
-        obj.body.fixedRotation = false;
-        obj.body.quaternion.set(0, 0, 0, 1);
+        obj.body.fixedRotation = true;
         obj.body.linearDamping = 0.55;
-        obj.body.angularDamping = 0.18;
+        obj.body.angularDamping = 0.9;
         obj.body.updateMassProperties();
         jumpPads.push(obj);
       }
@@ -3965,6 +4011,11 @@ createStaticBox(
 
       const basePos = obj.mesh.position.clone();
       const baseColor = new THREE.Color(obj.colorHex ?? 0xffffff);
+      const debrisTexture = obj.name === "箱"
+        ? textures.cardboard
+        : obj.name === "板"
+          ? textures.board
+          : null;
 
       scene.remove(obj.mesh);
       world.removeBody(obj.body);
@@ -3987,13 +4038,19 @@ createStaticBox(
             basePos.z + rand(-0.25, 0.25)
           ),
           size: new THREE.Vector3(s, s, s),
-          color: baseColor.getHex(),
+          color: debrisTexture ? 0xffffff : baseColor.getHex(),
           mass: 0.25,
           hp: 9999,
           score: 0,
           name: "debris",
           breakable: false
         });
+
+        if (debrisTexture && piece.mesh && piece.mesh.material) {
+          piece.mesh.material.map = debrisTexture;
+          piece.mesh.material.color.setHex(0xffffff);
+          piece.mesh.material.needsUpdate = true;
+        }
 
         piece.body.velocity.set(rand(-3, 3), rand(3, 7), rand(-3, 3));
         piece.body.angularVelocity.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
@@ -4782,14 +4839,14 @@ createStaticBox(
 
         if (obj.isNPC) {
           // NPCは破壊不能。ただし、頭突きでは派手に吹き飛ばす。
-          const npcImpulsePower = impulsePower * (obj.npcType === "dog" ? 3.4 : 3.0) * legendaryPowerMultiplier;
-          const upwardPower = (obj.npcType === "dog" ? 11.5 : 12.5) * (hasLegendarySwordPower ? 1.35 : 1);
+          const npcImpulsePower = impulsePower * (obj.npcType === "rabbit" ? 3.8 : (obj.npcType === "dog" ? 3.4 : 3.0)) * legendaryPowerMultiplier;
+          const upwardPower = (obj.npcType === "rabbit" ? 13.5 : (obj.npcType === "dog" ? 11.5 : 12.5)) * (hasLegendarySwordPower ? 1.35 : 1);
 
           obj.stunTimer = 2.0;
           obj.isWalking = false;
 
           if (hasLegendarySwordPower) {
-            incrementCounterMap(state.legendaryPowerHeadbuttByName, obj.name || (obj.npcType === "dog" ? "犬" : "人"));
+            incrementCounterMap(state.legendaryPowerHeadbuttByName, obj.name || (obj.npcType === "rabbit" ? "ウサギ" : (obj.npcType === "dog" ? "犬" : "人")));
             legendaryMissionChanged = true;
           }
 
@@ -5271,12 +5328,12 @@ createStaticBox(
         check: () => state.destroyedCount >= 10
       },
       {
-        id: "score5000",
+        id: "score50000",
         title: "破壊の新人",
-        desc: "スコアを5000点以上にする",
+        desc: "スコアを50000点以上にする",
         reward: 200,
-        progressText: () => `${state.score}/5000`,
-        check: () => state.score >= 5000
+        progressText: () => `${state.score}/50000`,
+        check: () => state.score >= 50000
       },
       {
         id: "destroyBoards",
@@ -5287,12 +5344,12 @@ createStaticBox(
         check: () => (state.destroyedByName["板"] || 0) >= 5
       },
       {
-        id: "score10000",
+        id: "score100000",
         title: "破壊の中級者",
-        desc: "スコアを10000点以上にする",
+        desc: "スコアを100000点以上にする",
         reward: 200,
-        progressText: () => `${state.score}/10000`,
-        check: () => state.score >= 10000
+        progressText: () => `${state.score}/100000`,
+        check: () => state.score >= 100000
       },
       {
         id: "destroyCars",
@@ -5303,12 +5360,20 @@ createStaticBox(
         check: () => (state.destroyedByName["車っぽい物体"] || 0) >= 2
       },
       {
-        id: "score15000",
+        id: "score150000",
         title: "破壊マスター",
-        desc: "スコアを15000点以上にする",
+        desc: "スコアを150000点以上にする",
         reward: 1000,
-        progressText: () => `${state.score}/15000`,
-        check: () => state.score >= 15000
+        progressText: () => `${state.score}/150000`,
+        check: () => state.score >= 150000
+      },
+      {
+        id: "captureRabbit",
+        title: "ウサギ！ゲットだぜ！",
+        desc: "ウサギを1回捕獲する",
+        reward: 500,
+        progressText: () => `${state.rabbitCaptureCount}/1`,
+        check: () => state.rabbitCaptureCount >= 1
       },
       {
         id: "destroyBomb",
@@ -5319,12 +5384,12 @@ createStaticBox(
         check: () => (state.destroyedByName["あやしい赤箱"] || 0) >= 1
       },
       {
-        id: "score30000",
+        id: "score300000",
         title: "破壊の化身",
-        desc: "スコアを30000点以上にする",
-        reward: 3000,
-        progressText: () => `${state.score}/30000`,
-        check: () => state.score >= 30000
+        desc: "スコアを300000点以上にする",
+        reward: 30000,
+        progressText: () => `${state.score}/300000`,
+        check: () => state.score >= 300000
       },
       {
         id: "jumpPadOnce",
@@ -5359,12 +5424,12 @@ createStaticBox(
         check: () => state.legendaryPowerHeadbuttCount >= 1
       },
       {
-        id: "score50000",
+        id: "score500000",
         title: "破壊神",
-        desc: "スコアを50000点以上にする",
-        reward: 5000,
-        progressText: () => `${state.score}/50000`,
-        check: () => state.score >= 50000
+        desc: "スコアを500000点以上にする",
+        reward: 500000,
+        progressText: () => `${state.score}/500000`,
+        check: () => state.score >= 500000
       },
       {
         id: "secretCannonHuman5",
@@ -5385,6 +5450,15 @@ createStaticBox(
         check: () => (state.cannonLaunchByName["犬"] || 0) >= 5
       },
       {
+        id: "secretCannonRabbit5",
+        title: "ウサギの大砲 大ジャンプ",
+        desc: "大砲でウサギを5回発射する",
+        reward: 1800,
+        hidden: true,
+        progressText: () => `${state.cannonLaunchByName["ウサギ"] || 0}/5`,
+        check: () => (state.cannonLaunchByName["ウサギ"] || 0) >= 5
+      },
+      {
         id: "secretLegendaryHuman5",
         title: "対人伝説ヘッド",
         desc: "伝説の剣パワー頭突きを人に5回当てる",
@@ -5403,6 +5477,15 @@ createStaticBox(
         check: () => (state.legendaryPowerHeadbuttByName["犬"] || 0) >= 5
       },
       {
+        id: "secretLegendaryRabbit5",
+        title: "ウサちゃん伝説ヘッド",
+        desc: "伝説の剣パワー頭突きをウサギに5回当てる",
+        reward: 2200,
+        hidden: true,
+        progressText: () => `${state.legendaryPowerHeadbuttByName["ウサギ"] || 0}/5`,
+        check: () => (state.legendaryPowerHeadbuttByName["ウサギ"] || 0) >= 5
+      },
+      {
         id: "secretDestroyTitleSign",
         title: "看板まで壊すヤギ",
         desc: "ゲームタイトルが書かれた看板を破壊する",
@@ -5412,13 +5495,13 @@ createStaticBox(
         check: () => (state.destroyedByName["ゲームタイトル看板"] || 0) >= 1
       },
       {
-        id: "score100000",
+        id: "score1000000",
         title: "伝説になったヤギ",
-        desc: "スコアを100000点以上にする",
+        desc: "スコアを1000000点以上にする",
         reward: 10000,
         hidden: true,
-        progressText: () => `${state.score}/100000`,
-        check: () => state.score >= 100000
+        progressText: () => `${state.score}/1000000`,
+        check: () => state.score >= 1000000
       }
     ];
 
@@ -5441,32 +5524,18 @@ createStaticBox(
           addScore(totalReward, player.mesh.position, { skipMissionUpdate: true });
         }
 
-        // 隠しミッションが含まれる場合は、隠しミッションの通知を先にキューへ入れる。
-        // 通常ミッションも同時達成している場合は、その後に通常ミッション通知を続けて表示する。
         if (secretCompleted.length > 0) {
           const secretReward = secretCompleted.reduce((sum, mission) => sum + mission.reward, 0);
           const secretTitle = secretCompleted.length === 1 ? secretCompleted[0].title : "複数の隠しミッション";
           showSecretMissionClearToast(secretTitle, secretReward, secretCompleted.length);
           showMessage(`㊙ SECRET MISSION CLEAR：${secretTitle} +${secretReward}`);
           screenShake(0.55, 0.75);
-        }
-
-        if (normalCompleted.length > 0) {
-          const normalReward = normalCompleted.reduce((sum, mission) => sum + mission.reward, 0);
-
-          if (normalCompleted.length === 1) {
-            showMissionClearToast(normalCompleted[0].title, normalCompleted[0].reward, 1);
-
-            if (secretCompleted.length === 0) {
-              showMessage(`MISSION CLEAR：${normalCompleted[0].title} +${normalCompleted[0].reward}`);
-            }
-          } else {
-            showMissionClearToast("複数ミッション達成", normalReward, normalCompleted.length);
-
-            if (secretCompleted.length === 0) {
-              showMessage(`MISSION CLEAR x${normalCompleted.length} +${normalReward}`);
-            }
-          }
+        } else if (normalCompleted.length === 1) {
+          showMissionClearToast(normalCompleted[0].title, normalCompleted[0].reward, 1);
+          showMessage(`MISSION CLEAR：${normalCompleted[0].title} +${normalCompleted[0].reward}`);
+        } else {
+          showMissionClearToast("複数ミッション達成", totalReward, newlyCompleted.length);
+          showMessage(`MISSION CLEAR x${newlyCompleted.length} +${totalReward}`);
         }
       }
 
@@ -5643,22 +5712,32 @@ createStaticBox(
         const dir = toTarget.normalize();
 
         // 速度を少し上げ、地面摩擦に負けないようにする
-        const npcSpeed = npc.npcType === "dog"
-          ? npc.speed * 1.25
-          : npc.speed * 1.15;
+        const npcSpeed = npc.npcType === "rabbit"
+          ? npc.speed * 1.55
+          : npc.npcType === "dog"
+            ? npc.speed * 1.25
+            : npc.speed * 1.15;
 
         npc.body.velocity.x = dir.x * npcSpeed;
         npc.body.velocity.z = dir.z * npcSpeed;
 
-        // 上下方向は物理に任せる。浮き上がりだけ軽く抑える
-        if (npc.body.velocity.y > 0.5) {
-          npc.body.velocity.y *= 0.45;
+        if (npc.npcType === "rabbit") {
+          npc.hopCooldown = Math.max(0, (npc.hopCooldown || 0) - delta);
+          if (groundInfo.grounded && npc.hopCooldown <= 0) {
+            npc.body.velocity.y = 7.8;
+            npc.hopCooldown = rand(0.26, 0.46);
+          }
+        } else {
+          // 上下方向は物理に任せる。浮き上がりだけ軽く抑える
+          if (npc.body.velocity.y > 0.5) {
+            npc.body.velocity.y *= 0.45;
+          }
         }
 
         npc.body.velocity.y = Math.max(npc.body.velocity.y, -7);
 
         npc.visualYaw = Math.atan2(dir.x, dir.z);
-        npc.walkAnimTime += delta * (npc.npcType === "dog" ? 12 : 9);
+        npc.walkAnimTime += delta * (npc.npcType === "rabbit" ? 18 : (npc.npcType === "dog" ? 12 : 9));
         npc.isWalking = true;
       }
     }
@@ -5735,6 +5814,28 @@ createStaticBox(
               1.0 + Math.cos(t) * 0.025
             );
           }
+
+          if (npc.npcType === "rabbit") {
+            // ウサギ型：高速でピョンピョン跳ねる動き
+            const hop = Math.abs(Math.sin(t));
+            const legSwing = Math.sin(t * 1.2) * 0.85;
+
+            if (parts.frontLeftLegPivot) parts.frontLeftLegPivot.rotation.x = -legSwing * 0.55;
+            if (parts.frontRightLegPivot) parts.frontRightLegPivot.rotation.x = -legSwing * 0.55;
+            if (parts.backLeftLegPivot) parts.backLeftLegPivot.rotation.x = legSwing;
+            if (parts.backRightLegPivot) parts.backRightLegPivot.rotation.x = legSwing;
+
+            if (parts.leftEar) parts.leftEar.rotation.x = -0.12 + Math.sin(t * 1.4) * 0.18;
+            if (parts.rightEar) parts.rightEar.rotation.x = -0.12 + Math.sin(t * 1.4 + 0.4) * 0.18;
+            if (parts.head) parts.head.position.y = 0.58 + hop * 0.045;
+            if (parts.tail) parts.tail.scale.setScalar(1.0 + hop * 0.12);
+
+            npc.mesh.scale.set(
+              1.0 + hop * 0.04,
+              1.0 + hop * 0.08,
+              1.0 - hop * 0.02
+            );
+          }
         } else {
           // 停止時はパーツを自然に戻す
           npc.mesh.rotation.z *= 0.85;
@@ -5753,6 +5854,9 @@ createStaticBox(
             parts.tail.rotation.y *= 0.8;
             parts.tail.rotation.x += (-0.55 - parts.tail.rotation.x) * 0.2;
           }
+
+          if (parts.leftEar) parts.leftEar.rotation.x *= 0.85;
+          if (parts.rightEar) parts.rightEar.rotation.x *= 0.85;
 
           npc.mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.15);
         }
@@ -5794,26 +5898,6 @@ createStaticBox(
         }
 
         updateBreakableSpawnProtection(obj, delta);
-
-        // 伝説の剣がマップ外へ落下した場合は、初期位置の真上から再出現させる。
-        // ランダム位置にはせず、必ず元の場所へ落ちてくるようにする。
-        if (obj.isLegendarySword && obj.body.position.y < FALL_RESET_Y) {
-          const base = obj.initialSpawnPosition || new THREE.Vector3(48, 11.25, 40);
-          const respawnY = base.y + (obj.respawnHeightOffset || 12);
-
-          if (state.lickTarget === obj) {
-            releaseLick();
-          }
-
-          obj.body.position.set(base.x, respawnY, base.z);
-          obj.body.velocity.set(0, 0, 0);
-          obj.body.angularVelocity.set(0, 0, 0);
-          obj.body.force.set(0, 0, 0);
-          obj.body.torque.set(0, 0, 0);
-          obj.body.quaternion.set(0, 0, 0, 1);
-          obj.body.wakeUp();
-          showMessage("伝説の剣が元の場所に戻った！");
-        }
 
         // 破壊可能オブジェクトがマップ外へ落下した場合は、
         // ランダムな高い位置から再出現させる。着地までは破壊保護をかける。
