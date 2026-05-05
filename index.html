@@ -550,7 +550,7 @@
         PC：WASD / Space / E / Q / Shift / R。
       </p>
       <button id="startButton">START</button>
-      <div id="versionText">Ver.1.2.4</div>
+      <div id="versionText">Ver.1.2.5</div>
     </div>
   </div>
 
@@ -843,47 +843,97 @@
       state.messageTimer = 1.8;
     }
 
-    function showMissionClearToast(title, reward, count = 1) {
+    // ミッション達成トーストを順番に表示するためのキューです。
+    // 通常ミッションと隠しミッションが同時・連続で達成された場合でも、
+    // 後から表示された通知が前の通知の setTimeout に消されないようにする。
+    let missionToastQueue = [];
+    let missionToastShowing = false;
+    let missionToastTimerId = null;
+
+    function enqueueMissionToast(toast) {
       if (!missionClearToastEl) return;
 
-      const titleText = count > 1
-        ? `MISSION CLEAR x${count}`
-        : `MISSION CLEAR`;
+      // 隠しミッションは、まだ表示待ちの通常ミッションより前に入れる。
+      // ただし、現在表示中のトーストは途中で消さず、表示完了後に続けて出す。
+      if (toast.secret) {
+        const firstNormalIndex = missionToastQueue.findIndex((item) => !item.secret);
+        if (firstNormalIndex >= 0) {
+          missionToastQueue.splice(firstNormalIndex, 0, toast);
+        } else {
+          missionToastQueue.push(toast);
+        }
+      } else {
+        missionToastQueue.push(toast);
+      }
 
-      missionClearToastEl.classList.remove("secretMissionToast");
-      missionClearToastEl.innerHTML = `
-        <div>${titleText}</div>
-        <div>${title}</div>
-        <div class="small">追加報酬 +${reward}</div>
-      `;
+      processMissionToastQueue();
+    }
 
-      missionClearToastEl.classList.add("show");
+    function processMissionToastQueue() {
+      if (!missionClearToastEl || missionToastShowing) return;
 
-      setTimeout(() => {
+      const toast = missionToastQueue.shift();
+      if (!toast) return;
+
+      missionToastShowing = true;
+
+      const titleText = toast.count > 1
+        ? `${toast.prefix} x${toast.count}`
+        : toast.prefix;
+
+      missionClearToastEl.classList.remove("show");
+      missionClearToastEl.classList.toggle("secretMissionToast", !!toast.secret);
+
+      missionClearToastEl.innerHTML = toast.secret
+        ? `
+          <div>㊙ ${titleText} ㊙</div>
+          <div>${toast.title}</div>
+          <div class="small">隠しミッション達成！ 追加報酬 +${toast.reward}</div>
+        `
+        : `
+          <div>${titleText}</div>
+          <div>${toast.title}</div>
+          <div class="small">追加報酬 +${toast.reward}</div>
+        `;
+
+      window.setTimeout(() => {
+        missionClearToastEl.classList.add("show");
+      }, 20);
+
+      if (missionToastTimerId) {
+        clearTimeout(missionToastTimerId);
+      }
+
+      const duration = toast.secret ? 3400 : 2600;
+      missionToastTimerId = setTimeout(() => {
         missionClearToastEl.classList.remove("show");
-      }, 2600);
+
+        setTimeout(() => {
+          missionClearToastEl.classList.remove("secretMissionToast");
+          missionToastShowing = false;
+          processMissionToastQueue();
+        }, 220);
+      }, duration);
+    }
+
+    function showMissionClearToast(title, reward, count = 1) {
+      enqueueMissionToast({
+        secret: false,
+        prefix: "MISSION CLEAR",
+        title,
+        reward,
+        count
+      });
     }
 
     function showSecretMissionClearToast(title, reward, count = 1) {
-      if (!missionClearToastEl) return;
-
-      const titleText = count > 1
-        ? `SECRET MISSION CLEAR x${count}`
-        : `SECRET MISSION CLEAR`;
-
-      missionClearToastEl.innerHTML = `
-        <div>㊙ ${titleText} ㊙</div>
-        <div>${title}</div>
-        <div class="small">隠しミッション達成！ 追加報酬 +${reward}</div>
-      `;
-
-      missionClearToastEl.classList.add("secretMissionToast");
-      missionClearToastEl.classList.add("show");
-
-      setTimeout(() => {
-        missionClearToastEl.classList.remove("show");
-        missionClearToastEl.classList.remove("secretMissionToast");
-      }, 3400);
+      enqueueMissionToast({
+        secret: true,
+        prefix: "SECRET MISSION CLEAR",
+        title,
+        reward,
+        count
+      });
     }
 
     function updateMessage(delta) {
@@ -1400,15 +1450,15 @@
         addDash(centerX, z + dashLength / 2, centerLineWidth, dashLength);
       }
 
-      // 左右端線：両端に同じ点線を置く
+      // 左右端線：道路の両端は白い実線にする。
+      // 中央線だけは上の処理で点線のまま残す。
       const leftEdgeX = centerX - width / 2 + edgeInset;
       const rightEdgeX = centerX + width / 2 - edgeInset;
+      const edgeLineLength = endZ - startZ;
+      const edgeLineCenterZ = (startZ + endZ) / 2;
 
-      for (let z = startZ; z <= endZ; z += dashLength + gapLength) {
-        const dashCenterZ = z + dashLength / 2;
-        addDash(leftEdgeX, dashCenterZ, edgeLineWidth, dashLength);
-        addDash(rightEdgeX, dashCenterZ, edgeLineWidth, dashLength);
-      }
+      addDash(leftEdgeX, edgeLineCenterZ, edgeLineWidth, edgeLineLength);
+      addDash(rightEdgeX, edgeLineCenterZ, edgeLineWidth, edgeLineLength);
     }
 
     function createTitleTexture() {
@@ -2061,12 +2111,19 @@
     function getCannonLaunchTargets() {
       const breakableTargets = destructibles
         .filter((obj) => obj && obj.body && !obj.destroyed && obj.breakable)
-        .map((obj) => ({ obj, body: obj.body, isPlayer: false, isBreakable: true, name: obj.name }));
+        .map((obj) => ({ obj, body: obj.body, isPlayer: false, isBreakable: true, isObjectTarget: true, name: obj.name }));
+
+      // 伝説の剣・ジャンプ台も大砲に入れて発射できる対象に含める。
+      // どちらも破壊不能なので destructibles には含まれないため、gameObjects側から拾う。
+      const gimmickTargets = gameObjects
+        .filter((obj) => obj && obj.body && !obj.destroyed && !obj.isCannon && (obj.isLegendarySword || obj.visualType === "jumpPad"))
+        .map((obj) => ({ obj, body: obj.body, isPlayer: false, isObjectTarget: true, name: obj.name }));
 
       return [
         { obj: player, body: player.body, isPlayer: true, name: "自キャラ" },
         ...npcs.map((npc) => ({ obj: npc, body: npc.body, isPlayer: false, name: npc.name })),
-        ...breakableTargets
+        ...breakableTargets,
+        ...gimmickTargets
       ];
     }
 
@@ -2084,8 +2141,8 @@
       const verticalDistance = Math.abs(pos.y - mouth.y);
 
       // 自キャラ/NPCは中心が口元に入ったら反応。
-      // 破壊可能オブジェクトはサイズが大きいものもあるため、中心だけでなく底面も考慮する。
-      if (target.isBreakable) {
+      // 破壊可能オブジェクト・伝説の剣・ジャンプ台はサイズ差があるため、中心だけでなく底面も考慮する。
+      if (target.isBreakable || target.isObjectTarget) {
         return horizontalDistance < 1.15 + Math.min(radius, 1.6) && bottomY < mouth.y + 1.1 && pos.y > mouth.y - 0.6;
       }
 
@@ -2143,6 +2200,11 @@
         target.body.velocity.set(launchDir.x * 56, 36, launchDir.z * 56);
         target.body.angularVelocity.set(rand(-3, 3), rand(-6, 6), rand(-3, 3));
         target.body.wakeUp();
+
+        // ベロで掴んだまま大砲発射すると、ベロの引っ張り処理で発射が弱まるため解除する。
+        if (target.obj && state.lickTarget === target.obj) {
+          releaseLick();
+        }
 
         if (target.isPlayer) {
           state.cannonLaunchCount += 1;
@@ -3526,6 +3588,8 @@ createStaticBox(
         colorHex: 0x77ddff,
         destroyed: false,
         isLegendarySword: true,
+        initialSpawnPosition: position.clone(),
+        respawnHeightOffset: 12,
         visualYOffset: 0,
         lastHitTime: 0
       };
@@ -3813,9 +3877,12 @@ createStaticBox(
       if (visualType === "jumpPad") {
         obj.isJumpPad = true;
         obj.jumpPadCooldown = 0;
-        obj.body.fixedRotation = true;
+        // スポーン時は上向きのまま出すが、その後は他の物体と同じく物理演算で回転させる。
+        // fixedRotation=true のままだと、大砲で発射した後に斜め向きで固定されることがあるため解除する。
+        obj.body.fixedRotation = false;
+        obj.body.quaternion.set(0, 0, 0, 1);
         obj.body.linearDamping = 0.55;
-        obj.body.angularDamping = 0.9;
+        obj.body.angularDamping = 0.18;
         obj.body.updateMassProperties();
         jumpPads.push(obj);
       }
@@ -5374,18 +5441,32 @@ createStaticBox(
           addScore(totalReward, player.mesh.position, { skipMissionUpdate: true });
         }
 
+        // 隠しミッションが含まれる場合は、隠しミッションの通知を先にキューへ入れる。
+        // 通常ミッションも同時達成している場合は、その後に通常ミッション通知を続けて表示する。
         if (secretCompleted.length > 0) {
           const secretReward = secretCompleted.reduce((sum, mission) => sum + mission.reward, 0);
           const secretTitle = secretCompleted.length === 1 ? secretCompleted[0].title : "複数の隠しミッション";
           showSecretMissionClearToast(secretTitle, secretReward, secretCompleted.length);
           showMessage(`㊙ SECRET MISSION CLEAR：${secretTitle} +${secretReward}`);
           screenShake(0.55, 0.75);
-        } else if (normalCompleted.length === 1) {
-          showMissionClearToast(normalCompleted[0].title, normalCompleted[0].reward, 1);
-          showMessage(`MISSION CLEAR：${normalCompleted[0].title} +${normalCompleted[0].reward}`);
-        } else {
-          showMissionClearToast("複数ミッション達成", totalReward, newlyCompleted.length);
-          showMessage(`MISSION CLEAR x${newlyCompleted.length} +${totalReward}`);
+        }
+
+        if (normalCompleted.length > 0) {
+          const normalReward = normalCompleted.reduce((sum, mission) => sum + mission.reward, 0);
+
+          if (normalCompleted.length === 1) {
+            showMissionClearToast(normalCompleted[0].title, normalCompleted[0].reward, 1);
+
+            if (secretCompleted.length === 0) {
+              showMessage(`MISSION CLEAR：${normalCompleted[0].title} +${normalCompleted[0].reward}`);
+            }
+          } else {
+            showMissionClearToast("複数ミッション達成", normalReward, normalCompleted.length);
+
+            if (secretCompleted.length === 0) {
+              showMessage(`MISSION CLEAR x${normalCompleted.length} +${normalReward}`);
+            }
+          }
         }
       }
 
@@ -5713,6 +5794,26 @@ createStaticBox(
         }
 
         updateBreakableSpawnProtection(obj, delta);
+
+        // 伝説の剣がマップ外へ落下した場合は、初期位置の真上から再出現させる。
+        // ランダム位置にはせず、必ず元の場所へ落ちてくるようにする。
+        if (obj.isLegendarySword && obj.body.position.y < FALL_RESET_Y) {
+          const base = obj.initialSpawnPosition || new THREE.Vector3(48, 11.25, 40);
+          const respawnY = base.y + (obj.respawnHeightOffset || 12);
+
+          if (state.lickTarget === obj) {
+            releaseLick();
+          }
+
+          obj.body.position.set(base.x, respawnY, base.z);
+          obj.body.velocity.set(0, 0, 0);
+          obj.body.angularVelocity.set(0, 0, 0);
+          obj.body.force.set(0, 0, 0);
+          obj.body.torque.set(0, 0, 0);
+          obj.body.quaternion.set(0, 0, 0, 1);
+          obj.body.wakeUp();
+          showMessage("伝説の剣が元の場所に戻った！");
+        }
 
         // 破壊可能オブジェクトがマップ外へ落下した場合は、
         // ランダムな高い位置から再出現させる。着地までは破壊保護をかける。
