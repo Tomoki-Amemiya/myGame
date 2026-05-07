@@ -710,7 +710,7 @@
       <button id="missionModeButton" class="modeButton">ミッション モード</button>
       <button id="timeAttackModeButton" class="modeButton">タイムアタック モード</button>
       <button id="bakaModeButton" class="modeButton">バカゲー モード</button>
-      <div id="versionText">Ver.1.3.4</div>
+      <div id="versionText">Ver.1.3.5</div>
     </div>
   </div>
 
@@ -948,6 +948,8 @@
       cannonLaunchByName: {},
       legendaryPowerHeadbuttByName: {},
       rabbitCaptureCount: 0,
+      ostrichEggBrokenCount: 0,
+      ostrichHeadbuttCount: 0,
 
       // 画面中央メッセージの表示残り時間。秒単位です。
       messageTimer: 0
@@ -1016,6 +1018,10 @@
 
     // マップギミック：大砲
     const cannons = [];
+
+    // 新規ギミック/固定破壊物です。
+    const treeObjects = [];
+
     // 大砲の砲身の上向き角度です。地面と平行ではなく、斜め上に発射します。
     const CANNON_PITCH = Math.PI / 6;
 
@@ -1085,7 +1091,7 @@
 
     function getBakaModeNPCSpeedMultiplier(npc) {
       if (!isBakaMode()) return 1;
-      if (npc && npc.npcType === "rabbit") return 5;
+      if (npc && npc.npcType === "rabbit") return 2.5;
       if (npc && (npc.npcType === "human" || npc.npcType === "dog")) return 10;
       return 1;
     }
@@ -1596,7 +1602,7 @@
         markBroadphaseDirty();
       }
 
-      const arrays = [gameObjects, destructibles, jumpPads, cannons, npcs];
+      const arrays = [gameObjects, destructibles, jumpPads, cannons, npcs, treeObjects];
       for (const array of arrays) {
         let index = array.indexOf(obj);
         while (index >= 0) {
@@ -1820,6 +1826,7 @@
       hideMissionUIForMode();
 
       if (mode === "mission") {
+        createTrees();
         updateMission();
         showMessage("ミッションモード開始！準備中...");
       } else if (mode === "timeAttack") {
@@ -1830,6 +1837,7 @@
         spawnBreakableRain(64 * 4);
         showMessage("タイムアタック開始！壊しまくれ！");
       } else if (mode === "baka") {
+        createTrees();
         applyBakaModeToExistingNPCs();
         spawnBreakableRain(64 * 4);
         updateMission();
@@ -2564,6 +2572,10 @@
         });
       }
 
+      if (type === "ostrichEgg") {
+        return createOstrichEgg(position);
+      }
+
       return createNPC({
         type: "human",
         name: "人",
@@ -2575,7 +2587,7 @@
     }
 
     // 灰色高台のボタンを押した時の出現処理です。
-    // 破壊可能オブジェクト85%、NPC15%（人5%、犬5%、ウサギ5%）の割合です。
+    // 破壊可能オブジェクト80%、NPC/卵20%（人5%、犬5%、ウサギ5%、卵5%）の割合です。
     function spawnFromButton() {
       const spawnCount = getBakaModeSpawnCount();
       const spawnedNames = [];
@@ -2584,14 +2596,16 @@
         const r = Math.random();
         let spawned;
 
-        if (r < 0.85) {
+        if (r < 0.80) {
           spawned = spawnRandomBreakableFromSky();
-        } else if (r < 0.90) {
+        } else if (r < 0.85) {
           spawned = spawnRandomNPCFromSky("human");
-        } else if (r < 0.95) {
+        } else if (r < 0.90) {
           spawned = spawnRandomNPCFromSky("dog");
-        } else {
+        } else if (r < 0.95) {
           spawned = spawnRandomNPCFromSky("rabbit");
+        } else {
+          spawned = spawnRandomNPCFromSky("ostrichEgg");
         }
 
         if (spawned && spawned.name) {
@@ -2734,6 +2748,7 @@
       }
       if (target.obj && target.obj.npcType === "dog") return 0.48;
       if (target.obj && target.obj.npcType === "rabbit") return 0.42;
+      if (target.obj && target.obj.npcType === "ostrich") return 0.95;
       if (target.obj && target.obj.npcType === "human") return 0.95;
       return 0.8;
     }
@@ -2746,6 +2761,7 @@
       }
       if (target.obj && target.obj.npcType === "dog") return 0.55;
       if (target.obj && target.obj.npcType === "rabbit") return 0.5;
+      if (target.obj && target.obj.npcType === "ostrich") return 0.65;
       if (target.obj && target.obj.npcType === "human") return 0.55;
       return 0.7;
     }
@@ -3183,6 +3199,347 @@ createStaticBox(
 
       // 反対側の灰色高台の上にスポーンボタンを配置
       createSpawnButton();
+    }
+
+
+    function createOstrichEggCrackMarks(stage, size) {
+      const group = new THREE.Group();
+      group.visible = false;
+
+      const crackMat = new THREE.MeshBasicMaterial({
+        color: stage === 1 ? 0x6a6255 : 0x292520,
+        transparent: true,
+        opacity: stage === 1 ? 0.7 : 0.95,
+        side: THREE.DoubleSide
+      });
+
+      function addCrack(x, y, z, length, angle, width = 0.035) {
+        const crack = new THREE.Mesh(new THREE.PlaneGeometry(width, length), crackMat);
+        crack.position.set(x, y, z);
+        crack.rotation.z = angle;
+        group.add(crack);
+      }
+
+      const frontZ = -size.z / 2 - 0.012;
+      if (stage === 1) {
+        addCrack(-0.28, 0.22, frontZ, 0.54, 0.55);
+        addCrack(-0.08, 0.02, frontZ, 0.34, -0.8);
+        addCrack(0.25, -0.18, frontZ, 0.42, 0.35);
+      } else {
+        addCrack(-0.38, 0.30, frontZ, 0.70, 0.42, 0.045);
+        addCrack(-0.08, 0.05, frontZ, 0.58, -0.82, 0.04);
+        addCrack(0.22, 0.20, frontZ, 0.62, 0.88, 0.04);
+        addCrack(0.36, -0.25, frontZ, 0.56, -0.25, 0.04);
+        addCrack(-0.24, -0.28, frontZ, 0.42, 0.95, 0.035);
+      }
+
+      return group;
+    }
+
+    function createOstrichEggMesh(size, color = 0xf3ead8) {
+      const group = new THREE.Group();
+
+      const eggMat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.72,
+        metalness: 0.02
+      });
+
+      const egg = new THREE.Mesh(
+        new THREE.SphereGeometry(0.72, 24, 18),
+        eggMat
+      );
+      egg.scale.set(size.x / 1.45, size.y / 1.45, size.z / 1.45);
+      egg.castShadow = true;
+      egg.receiveShadow = true;
+      group.add(egg);
+
+      const crack60 = createOstrichEggCrackMarks(1, size);
+      const crack30 = createOstrichEggCrackMarks(2, size);
+      group.add(crack60);
+      group.add(crack30);
+
+      group.userData.parts = { egg, crack60, crack30 };
+      return group;
+    }
+
+    function createOstrichMesh(color = 0x4a3526) {
+      const group = new THREE.Group();
+      const parts = {};
+
+      const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.72 });
+      const neckMat = new THREE.MeshStandardMaterial({ color: 0xd7b58a, roughness: 0.65 });
+      const legMat = new THREE.MeshStandardMaterial({ color: 0xc99258, roughness: 0.78 });
+      const darkMat = new THREE.MeshStandardMaterial({ color: 0x1d1610, roughness: 0.8 });
+      const beakMat = new THREE.MeshStandardMaterial({ color: 0xffc24a, roughness: 0.55 });
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.72, 1.15), bodyMat);
+      body.position.set(0, 0.95, 0.1);
+      body.castShadow = true;
+      body.receiveShadow = true;
+      group.add(body);
+      parts.body = body;
+
+      const neck = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.95, 0.22), neckMat);
+      neck.position.set(0, 1.55, -0.35);
+      neck.rotation.x = -0.18;
+      neck.castShadow = true;
+      group.add(neck);
+      parts.neck = neck;
+
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 0.42), neckMat);
+      head.position.set(0, 2.12, -0.58);
+      head.castShadow = true;
+      group.add(head);
+      parts.head = head;
+
+      const beak = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.34), beakMat);
+      beak.position.set(0, 2.08, -0.94);
+      beak.castShadow = true;
+      group.add(beak);
+      parts.beak = beak;
+
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.34, 0.34), darkMat);
+      tail.position.set(0, 1.08, 0.82);
+      tail.rotation.x = -0.35;
+      tail.castShadow = true;
+      group.add(tail);
+      parts.tail = tail;
+
+      function makeLegPivot(x) {
+        const pivot = new THREE.Group();
+        pivot.position.set(x, 0.62, 0.08);
+        const upper = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.16), legMat);
+        upper.position.set(0, -0.26, 0);
+        upper.castShadow = true;
+        const lower = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.52, 0.13), legMat);
+        lower.position.set(0, -0.78, 0.04);
+        lower.castShadow = true;
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.46), legMat);
+        foot.position.set(0, -1.07, -0.08);
+        foot.castShadow = true;
+        pivot.add(upper, lower, foot);
+        group.add(pivot);
+        return pivot;
+      }
+
+      parts.leftLegPivot = makeLegPivot(-0.24);
+      parts.rightLegPivot = makeLegPivot(0.24);
+
+      const eyeGeo = new THREE.BoxGeometry(0.055, 0.055, 0.035);
+      const leftEye = new THREE.Mesh(eyeGeo, darkMat);
+      leftEye.position.set(-0.12, 2.16, -0.795);
+      const rightEye = new THREE.Mesh(eyeGeo, darkMat);
+      rightEye.position.set(0.12, 2.16, -0.795);
+      group.add(leftEye, rightEye);
+
+      group.userData.parts = parts;
+      return group;
+    }
+
+    function updateOstrichEggVisual(obj) {
+      if (!obj || obj.visualType !== "ostrichEgg" || !obj.mesh || !obj.mesh.userData.parts) return;
+      const ratio = obj.maxHp > 0 ? obj.hp / obj.maxHp : 0;
+      const parts = obj.mesh.userData.parts;
+      if (parts.crack60) parts.crack60.visible = ratio <= 0.6;
+      if (parts.crack30) parts.crack30.visible = ratio <= 0.3;
+    }
+
+    function spawnOstrichEggDebris(position) {
+      const colors = [0xf3ead8, 0xe4d8c4, 0xffffff];
+      for (let i = 0; i < 12; i++) {
+        const piece = createDynamicBox({
+          position: new THREE.Vector3(position.x + rand(-0.35, 0.35), position.y + rand(0.1, 0.55), position.z + rand(-0.35, 0.35)),
+          size: new THREE.Vector3(rand(0.12, 0.32), rand(0.05, 0.16), rand(0.12, 0.32)),
+          color: colors[i % colors.length],
+          mass: 0.12,
+          hp: 9999,
+          score: 0,
+          name: "卵の破片",
+          breakable: false
+        });
+        piece.body.velocity.set(rand(-3, 3), rand(3, 7), rand(-3, 3));
+        piece.body.angularVelocity.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+        setTimeout(() => {
+          if (piece.mesh.parent) scene.remove(piece.mesh);
+          if (piece.body.world) world.removeBody(piece.body);
+          const idx = gameObjects.indexOf(piece);
+          if (idx >= 0) gameObjects.splice(idx, 1);
+        }, 7000);
+      }
+    }
+
+    function createOstrichEgg(position = getRandomNPCHighPosition()) {
+      const egg = createDynamicBox({
+        position,
+        size: new THREE.Vector3(1.15, 1.55, 1.15),
+        color: 0xf3ead8,
+        // 頭突きで何度も狙いやすいよう、少し重めにする。
+        mass: 4.2,
+        hp: 350,
+        score: 260,
+        name: "卵",
+        breakable: true,
+        visualType: "ostrichEgg"
+      });
+      // 頭突き後に遠くへ転がりすぎないよう、卵だけ減衰を強める。
+      egg.body.linearDamping = 0.55;
+      egg.body.angularDamping = 0.96;
+      return egg;
+    }
+
+    function hatchOstrichFromEgg(position) {
+      state.ostrichEggBrokenCount += 1;
+      spawnOstrichEggDebris(position);
+      createNPC({
+        type: "ostrich",
+        name: "ダチョウ",
+        position: new THREE.Vector3(position.x, Math.max(1.4, position.y + 0.35), position.z),
+        color: 0x4a3526,
+        radius: 0.5,
+        height: 1.75,
+        speed: rand(5.0, 5.7),
+        wanderRadius: rand(24, 32)
+      });
+      showMessage("卵が割れてダチョウが出現！");
+      updateMission();
+    }
+
+    function createTreeMesh(treeSize = "medium") {
+      const group = new THREE.Group();
+      const scale = treeSize === "large" ? 2.6 : treeSize === "small" ? 1.5 : 2.05;
+      const trunkMat = new THREE.MeshStandardMaterial({ map: textures.wood, color: 0xffffff, roughness: 0.88 });
+      const leafMat = new THREE.MeshStandardMaterial({ color: treeSize === "large" ? 0x2f8f3a : treeSize === "small" ? 0x58b95b : 0x3fa447, roughness: 0.82 });
+      const parts = {};
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * scale, 0.34 * scale, 2.25 * scale, 12), trunkMat);
+      trunk.position.y = 1.12 * scale;
+      trunk.castShadow = true;
+      trunk.receiveShadow = true;
+      group.add(trunk);
+      parts.trunk = trunk;
+
+      const crown1 = new THREE.Mesh(new THREE.SphereGeometry(0.9 * scale, 16, 12), leafMat);
+      crown1.position.set(0, 2.45 * scale, 0);
+      crown1.scale.set(1.05, 0.85, 1.05);
+      crown1.castShadow = true;
+      crown1.receiveShadow = true;
+      group.add(crown1);
+
+      const crown2 = new THREE.Mesh(new THREE.SphereGeometry(0.72 * scale, 16, 12), leafMat);
+      crown2.position.set(-0.45 * scale, 2.15 * scale, 0.18 * scale);
+      crown2.castShadow = true;
+      crown2.receiveShadow = true;
+      group.add(crown2);
+
+      const crown3 = new THREE.Mesh(new THREE.SphereGeometry(0.72 * scale, 16, 12), leafMat);
+      crown3.position.set(0.45 * scale, 2.2 * scale, -0.15 * scale);
+      crown3.castShadow = true;
+      crown3.receiveShadow = true;
+      group.add(crown3);
+
+      parts.crowns = [crown1, crown2, crown3];
+
+      // createDynamicBox は物理Body中心に mesh.position を同期するため、
+      // 木の見た目だけを半分下げて、幹の下端が地面に接するようにする。
+      for (const child of group.children) {
+        child.position.y -= 1.675 * scale;
+      }
+
+      group.userData.parts = parts;
+      return group;
+    }
+
+    function spawnTreeHitDebris(obj, count = 5) {
+      if (!obj || !obj.mesh) return;
+      const pos = obj.mesh.position.clone();
+      for (let i = 0; i < count; i++) {
+        const piece = createDynamicBox({
+          position: new THREE.Vector3(pos.x + rand(-0.4, 0.4), pos.y + rand(1.0, 2.9), pos.z + rand(-0.4, 0.4)),
+          size: new THREE.Vector3(rand(0.12, 0.28), rand(0.08, 0.24), rand(0.12, 0.28)),
+          color: i % 2 === 0 ? 0x6d421d : 0x3fa447,
+          mass: 0.12,
+          hp: 9999,
+          score: 0,
+          name: "木の破片",
+          breakable: false
+        });
+        piece.body.velocity.set(rand(-2.2, 2.2), rand(2.0, 5.2), rand(-2.2, 2.2));
+        piece.body.angularVelocity.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+        setTimeout(() => {
+          if (piece.mesh.parent) scene.remove(piece.mesh);
+          if (piece.body.world) world.removeBody(piece.body);
+          const idx = gameObjects.indexOf(piece);
+          if (idx >= 0) gameObjects.splice(idx, 1);
+        }, 6000);
+      }
+    }
+
+    function registerTreeHeadbutt(obj) {
+      if (!obj || obj.visualType !== "tree") return;
+      obj.hitShakeTimer = 0.35;
+      spawnTreeHitDebris(obj, obj.treeSize === "large" ? 8 : obj.treeSize === "medium" ? 6 : 4);
+    }
+
+    function updateTreeVisual(obj, delta) {
+      if (!obj || obj.visualType !== "tree" || !obj.mesh) return;
+      obj.hitShakeTimer = Math.max(0, (obj.hitShakeTimer || 0) - delta);
+      if (obj.hitShakeTimer > 0) {
+        const t = clock.elapsedTime * 38;
+        const amp = obj.hitShakeTimer / 0.35;
+        obj.mesh.rotation.z = Math.sin(t) * 0.075 * amp;
+        obj.mesh.rotation.x = Math.cos(t * 0.78) * 0.055 * amp;
+      } else {
+        obj.mesh.rotation.z *= 0.82;
+        obj.mesh.rotation.x *= 0.82;
+      }
+    }
+
+    function getRandomTreePosition() {
+      for (let i = 0; i < 140; i++) {
+        const x = rand(-64, 64);
+        const z = rand(-64, 64);
+        const onRoad = Math.abs(x + 18) < 9.5 && Math.abs(z) < 68;
+        const nearStart = Math.hypot(x - PLAYER_START_POSITION.x, z - PLAYER_START_POSITION.z) < 8;
+        const nearBigPlatform = Math.hypot(x - 48, z - 40) < 12 || Math.hypot(x + 48, z + 36) < 11;
+        const nearCannon = Math.hypot(x - 26, z + 28) < 8;
+        if (!onRoad && !nearStart && !nearBigPlatform && !nearCannon) {
+          return new THREE.Vector3(x, 0, z);
+        }
+      }
+      return new THREE.Vector3(rand(20, 62), 0, rand(-62, 62));
+    }
+
+    function createTree(position, treeSize = "medium") {
+      const scale = treeSize === "large" ? 2.6 : treeSize === "small" ? 1.5 : 2.05;
+      const hp = treeSize === "large" ? 1350 : treeSize === "medium" ? 900 : 450;
+      const size = new THREE.Vector3(1.8 * scale, 3.35 * scale, 1.8 * scale);
+      const tree = createDynamicBox({
+        position: new THREE.Vector3(position.x, size.y / 2, position.z),
+        size,
+        color: 0x3fa447,
+        mass: 0,
+        hp,
+        score: treeSize === "large" ? 420 : treeSize === "medium" ? 300 : 180,
+        name: "木",
+        breakable: true,
+        visualType: "tree",
+        treeSize
+      });
+      tree.treeSize = treeSize;
+      tree.body.type = CANNON.Body.STATIC;
+      tree.body.updateMassProperties();
+      tree.body.allowSleep = false;
+      treeObjects.push(tree);
+      return tree;
+    }
+
+    function createTrees() {
+      if (treeObjects.length > 0) return;
+      const configs = ["large", "large", "medium", "medium", "medium", "medium", "small", "small", "small", "small", "small", "small"];
+      for (const treeSize of configs) {
+        createTree(getRandomTreePosition(), treeSize);
+      }
     }
 
     // =========================================================
@@ -3936,7 +4293,7 @@ createStaticBox(
     }
 
     // NPCを作る共通関数です.
-    // type: "human" または "dog"、speedで移動速度、wanderRadiusで歩き回る範囲を調整します。
+    // type: "human" / "dog" / "rabbit" / "ostrich"、speedで移動速度、wanderRadiusで歩き回る範囲を調整します。
     function createNPC(options) {
       const {
         type,
@@ -3951,12 +4308,15 @@ createStaticBox(
 
       const isDog = type === "dog";
       const isRabbit = type === "rabbit";
+      const isOstrich = type === "ostrich";
 
       const mesh = isDog
         ? createDogMesh(color)
         : isRabbit
           ? createRabbitMesh(color)
-          : createHumanMesh(color);
+          : isOstrich
+            ? createOstrichMesh(color)
+            : createHumanMesh(color);
 
       // NPCの物理判定を球ではなく箱にする
       // 球だと地面で転がる/浮く/引っかかるように見えやすいため
@@ -3964,7 +4324,9 @@ createStaticBox(
         ? new THREE.Vector3(0.9, 0.7, 1.1)
         : isRabbit
           ? new THREE.Vector3(0.72, 0.62, 0.92)
-          : new THREE.Vector3(0.75, 1.55, 0.75);
+          : isOstrich
+            ? new THREE.Vector3(0.9, 1.75, 1.1)
+            : new THREE.Vector3(0.75, 1.55, 0.75);
 
       const spawnY = position.y > 1
         ? position.y
@@ -3976,9 +4338,10 @@ createStaticBox(
       scene.add(mesh);
 
       const body = new CANNON.Body({
-        mass: isDog ? 1.4 : (isRabbit ? 0.95 : 2.4),
-        material: defaultMaterial,
-        linearDamping: 0.05,
+        mass: isDog ? 1.4 : (isRabbit ? 0.95 : (isOstrich ? 2.1 : 2.4)),
+        // NPCが地面摩擦に引っかかって速度が落ちすぎないよう、低摩擦寄りの材質にする。
+        material: bouncyMaterial,
+        linearDamping: isOstrich ? 0.015 : 0.03,
         angularDamping: 0.95,
         fixedRotation: true,
         shape: new CANNON.Box(
@@ -4021,7 +4384,7 @@ createStaticBox(
         isWalking: false,
 
         // NPCの見た目だけ上下補正する
-        visualYOffset: isRabbit ? -0.13 : (isDog ? -0.16 : -0.30),
+        visualYOffset: isRabbit ? -0.13 : (isDog ? -0.16 : (isOstrich ? -0.18 : -0.30)),
         hopCooldown: rand(0.05, 0.35),
 
         // 大砲で飛ばされた後、着地するまで自律歩行を止めるための状態
@@ -4088,7 +4451,7 @@ createStaticBox(
         ? clamp((state.lickTarget.body.mass || 1) / 3, 0.8, 2.4)
         : 1;
 
-      const npcTypeBonus = npc.npcType === "dog" ? 1.12 : 1.0;
+      const npcTypeBonus = npc.npcType === "ostrich" ? 1.18 : (npc.npcType === "dog" ? 1.12 : 1.0);
       const impulsePower = clamp(impact * 1.9 * heldObjectMassBonus * npcTypeBonus, 2.2, 24);
       const upwardPower = clamp(impact * 0.75, 0.7, 8.5);
 
@@ -4228,6 +4591,9 @@ createStaticBox(
           position: getRandomNPCGroundPosition()
         });
       }
+
+      // 新NPC「ダチョウ」は、最初は卵として1つ出現します。
+      createOstrichEgg(new THREE.Vector3(rand(-36, 36), 1.6, rand(-36, 36)));
     }
 
     function createLegendarySwordMesh() {
@@ -4411,6 +4777,14 @@ createStaticBox(
     const CAR_HEADBUTT_FORWARD_MULTIPLIER = 1.45;
     const CAR_HEADBUTT_UPWARD_IMPULSE = 1.2;
 
+    // 頭突き時の「吹き飛び距離」だけを少し控えめにするための倍率です。
+    // ダメージ計算とは分けているため、壊れやすさは大きく変えず、飛びすぎだけを抑えます。
+    const HEADBUTT_KNOCKBACK_MULTIPLIER = 0.78;
+
+    // 卵は連続で頭突きしやすいように、通常オブジェクトよりかなり飛びにくくします。
+    const OSTRICH_EGG_HEADBUTT_FORWARD_MULTIPLIER = 0.18;
+    const OSTRICH_EGG_HEADBUTT_UPWARD_IMPULSE = 0.8;
+
     // 家の見た目を作る関数です。
     // 初回衝撃まではこのGroupのまま家の形を維持し、衝撃後に壁・屋根パーツへ分解します。
     function createHouseMesh(size, color = 0xf2d19b) {
@@ -4584,7 +4958,7 @@ createStaticBox(
     // options.score      : 破壊時のスコア
     // options.name       : 「箱」「板」「車っぽい物体」などの名前
     // options.breakable  : trueなら破壊可能、falseなら破壊不能
-    // options.visualType : 見た目タイプ。box/car/dangerBox/legendarySword など
+    // options.visualType : 見た目タイプ。box/car/dangerBox/legendarySword/ostrichEgg/tree など
     function createDynamicBox(options) {
       const {
         position,
@@ -4602,6 +4976,10 @@ createStaticBox(
 
       if (visualType === "car") {
         mesh = createCarMesh(size, color);
+      } else if (visualType === "ostrichEgg") {
+        mesh = createOstrichEggMesh(size, color);
+      } else if (visualType === "tree") {
+        mesh = createTreeMesh(options.treeSize || "medium");
       } else if (visualType === "jumpPad") {
         mesh = createJumpPadMesh(size, color);
       } else if (visualType === "houseIntact") {
@@ -4738,7 +5116,16 @@ createStaticBox(
           collisionDamage = Math.min(collisionDamage, CAR_COLLISION_DAMAGE_CAP);
         }
 
+        // 卵は、頭突きの後に地面へ当たった追加衝撃で即割れしないようにする。
+        // ヒビ演出を見せるため、基本的には頭突きダメージで段階的に削る。
+        if (obj.visualType === "ostrichEgg") {
+          collisionDamage = Math.min(collisionDamage, 8);
+        }
+
         obj.hp -= collisionDamage;
+        if (obj.visualType === "ostrichEgg") {
+          updateOstrichEggVisual(obj);
+        }
 
         // 衝突しただけではスコア加算しない。
         // スコアは破壊時の destroyObject 側でのみ加算する。
@@ -4774,6 +5161,9 @@ createStaticBox(
 
       const dIdx = destructibles.indexOf(obj);
       if (dIdx >= 0) destructibles.splice(dIdx, 1);
+
+      const treeIdx = treeObjects.indexOf(obj);
+      if (treeIdx >= 0) treeObjects.splice(treeIdx, 1);
 
       // 破片を生成
       const pieceCount = clamp(Math.floor(rand(4, 8)), 4, 8);
@@ -5038,8 +5428,15 @@ createStaticBox(
     const originalDestroyObject = destroyObject;
     destroyObject = function patchedDestroyObject(obj, impactPower = 16) {
       const wasExplosive = obj.explosive === true;
+      const wasOstrichEgg = obj.visualType === "ostrichEgg";
       const pos = obj.mesh.position.clone();
       originalDestroyObject(obj, impactPower);
+
+      if (wasOstrichEgg) {
+        setTimeout(() => {
+          hatchOstrichFromEgg(pos);
+        }, 60);
+      }
 
       if (wasExplosive) {
         setTimeout(() => {
@@ -5607,11 +6004,19 @@ createStaticBox(
 
         if (obj.isNPC) {
           // NPCは破壊不能。ただし、頭突きでは派手に吹き飛ばす。
-          const npcImpulsePower = impulsePower * (obj.npcType === "rabbit" ? 3.8 : (obj.npcType === "dog" ? 3.4 : 3.0)) * legendaryPowerMultiplier;
-          const upwardPower = (obj.npcType === "rabbit" ? 13.5 : (obj.npcType === "dog" ? 11.5 : 12.5)) * (hasLegendarySwordPower ? 1.35 : 1);
+          const npcImpulsePower = impulsePower * (obj.npcType === "rabbit" ? 3.8 : (obj.npcType === "dog" ? 3.4 : (obj.npcType === "ostrich" ? 3.2 : 3.0))) * legendaryPowerMultiplier * HEADBUTT_KNOCKBACK_MULTIPLIER;
+          const upwardPower = (obj.npcType === "rabbit" ? 13.5 : (obj.npcType === "dog" ? 11.5 : (obj.npcType === "ostrich" ? 11.8 : 12.5))) * (hasLegendarySwordPower ? 1.35 : 1) * HEADBUTT_KNOCKBACK_MULTIPLIER;
 
           obj.stunTimer = 2.0;
           obj.isWalking = false;
+
+          if (obj.npcType === "ostrich") {
+            state.ostrichHeadbuttCount += 1;
+            // ダチョウは頭突き後、着地してからも分かりやすく高速移動するように長めにブーストする。
+            obj.ostrichBoostTimer = Math.max(obj.ostrichBoostTimer || 0, 8.0);
+            obj.stunTimer = Math.min(obj.stunTimer, 0.8);
+            legendaryMissionChanged = true;
+          }
 
           if (hasLegendarySwordPower) {
             incrementCounterMap(state.legendaryPowerHeadbuttByName, obj.name || (obj.npcType === "rabbit" ? "ウサギ" : (obj.npcType === "dog" ? "犬" : "人")));
@@ -5637,17 +6042,34 @@ createStaticBox(
 
           const effectiveImpulsePower = impulsePower * legendaryPowerMultiplier;
           const isCar = obj.visualType === "car";
+          const isOstrichEgg = obj.visualType === "ostrichEgg";
           const forwardImpulsePower = isCar
-            ? effectiveImpulsePower * CAR_HEADBUTT_FORWARD_MULTIPLIER
-            : effectiveImpulsePower;
+            ? effectiveImpulsePower * CAR_HEADBUTT_FORWARD_MULTIPLIER * HEADBUTT_KNOCKBACK_MULTIPLIER
+            : isOstrichEgg
+              ? effectiveImpulsePower * OSTRICH_EGG_HEADBUTT_FORWARD_MULTIPLIER
+              : effectiveImpulsePower * HEADBUTT_KNOCKBACK_MULTIPLIER;
           const upwardImpulsePower = isCar
-            ? CAR_HEADBUTT_UPWARD_IMPULSE * (hasLegendarySwordPower ? 1.4 : 1)
-            : (4.5 + impulsePower * 0.18) * (hasLegendarySwordPower ? 1.35 : 1);
+            ? CAR_HEADBUTT_UPWARD_IMPULSE * (hasLegendarySwordPower ? 1.4 : 1) * HEADBUTT_KNOCKBACK_MULTIPLIER
+            : isOstrichEgg
+              ? OSTRICH_EGG_HEADBUTT_UPWARD_IMPULSE
+              : (4.5 + impulsePower * 0.18) * (hasLegendarySwordPower ? 1.35 : 1) * HEADBUTT_KNOCKBACK_MULTIPLIER;
 
           // 車は頭突き時に真上へ跳ねやすかったため、上方向の速度を抑えてから
           // 前方向の吹き飛ばしを強めに入れる。
           if (isCar) {
             obj.body.velocity.y = Math.min(obj.body.velocity.y, 1.2);
+          }
+
+          // 卵は連続で頭突きしやすいよう、頭突き直後の速度をかなり抑える。
+          if (isOstrichEgg) {
+            obj.body.velocity.x *= 0.18;
+            obj.body.velocity.y = Math.min(obj.body.velocity.y, 0.6);
+            obj.body.velocity.z *= 0.18;
+            obj.body.angularVelocity.set(
+              obj.body.angularVelocity.x * 0.18,
+              obj.body.angularVelocity.y * 0.18,
+              obj.body.angularVelocity.z * 0.18
+            );
           }
 
           obj.body.applyImpulse(
@@ -5666,13 +6088,28 @@ createStaticBox(
                 continue;
               }
 
-              const headbuttDamage = isCar
-                ? (hasLegendarySwordPower ? CAR_HEADBUTT_DAMAGE_LEGENDARY : CAR_HEADBUTT_DAMAGE)
-                : impulsePower * 3.0;
+              let headbuttDamage;
+              if (isCar) {
+                headbuttDamage = hasLegendarySwordPower ? CAR_HEADBUTT_DAMAGE_LEGENDARY : CAR_HEADBUTT_DAMAGE;
+              } else if (obj.visualType === "ostrichEgg") {
+                // 卵は頭突き約5回で割れるよう、バカゲーモードの頭突き倍率に左右されない固定ダメージにする。
+                headbuttDamage = 70;
+              } else if (obj.visualType === "tree") {
+                // 木はサイズ別HPと合わせて、小=約5回 / 中=約10回 / 大=約15回を狙う。
+                headbuttDamage = 90;
+              } else {
+                headbuttDamage = impulsePower * 3.0;
+              }
 
               obj.hp -= headbuttDamage;
               if (obj.visualType === "titleSignBoard") {
                 registerTitleSignHeadbutt(obj);
+              }
+              if (obj.visualType === "tree") {
+                registerTreeHeadbutt(obj);
+              }
+              if (obj.visualType === "ostrichEgg") {
+                updateOstrichEggVisual(obj);
               }
               if (obj.hp <= 0) {
                 destroyObject(obj, impulsePower);
@@ -5684,7 +6121,7 @@ createStaticBox(
       }
 
       player.body.applyImpulse(
-        new CANNON.Vec3(forward.x * 1.5, 0.4, forward.z * 1.5),
+        new CANNON.Vec3(forward.x * 1.5 * HEADBUTT_KNOCKBACK_MULTIPLIER, 0.4 * HEADBUTT_KNOCKBACK_MULTIPLIER, forward.z * 1.5 * HEADBUTT_KNOCKBACK_MULTIPLIER),
         player.body.position
       );
 
@@ -5962,12 +6399,8 @@ createStaticBox(
         const cannonPos = getCannonMouthPosition(obj);
         const distance = mouthPos.distanceTo(cannonPos);
 
-        if (distance > 14) {
-          releaseLick();
-          showMessage("ベロが外れた！");
-          return;
-        }
-
+        // 自分でベロを解除しない限り、距離が離れても外さない。
+        // 大砲で発射された対象などは、発射処理側で明示的に releaseLick() する。
         const toPlayer = playerPos.clone().sub(obj.position);
         toPlayer.y = 0;
         if (toPlayer.lengthSq() > 0.001) {
@@ -5988,12 +6421,8 @@ createStaticBox(
       const toHold = holdPos.clone().sub(objPos);
       const distance = toHold.length();
 
-      // 以前は10m程度で外していたが、少し振り回せるように距離を緩和
-      if (distance > 18) {
-        releaseLick();
-        showMessage("ベロが外れた！");
-        return;
-      }
+      // 自分でベロを解除しない限り、距離が離れても外さない。
+      // 離れすぎてもベロ表示を伸ばし、引っ張り処理を継続する。
 
       obj.body.wakeUp();
 
@@ -6098,10 +6527,10 @@ createStaticBox(
       {
         id: "destroy10",
         title: "破壊入門",
-        desc: "箱・板・車などを合計10個破壊する",
+        desc: "箱・板・車などを合計5個破壊する",
         reward: 100,
-        progressText: () => `${state.destroyedCount}/10`,
-        check: () => state.destroyedCount >= 10
+        progressText: () => `${state.destroyedCount}/5`,
+        check: () => state.destroyedCount >= 5
       },
       {
         id: "destroyBoards",
@@ -6126,6 +6555,30 @@ createStaticBox(
         reward: 500,
         progressText: () => `${state.rabbitCaptureCount}/1`,
         check: () => state.rabbitCaptureCount >= 1
+      },
+      {
+        id: "breakOstrichEgg",
+        title: "卵パッカーン！",
+        desc: "卵を1個割る",
+        reward: 600,
+        progressText: () => `${state.ostrichEggBrokenCount}/1`,
+        check: () => state.ostrichEggBrokenCount >= 1
+      },
+      {
+        id: "headbuttOstrich5",
+        title: "ダチョウパニック",
+        desc: "ダチョウに頭突きを5回当てる",
+        reward: 900,
+        progressText: () => `${state.ostrichHeadbuttCount}/5`,
+        check: () => state.ostrichHeadbuttCount >= 5
+      },
+      {
+        id: "destroyTrees3",
+        title: "森の破壊者",
+        desc: "木を3本破壊する",
+        reward: 900,
+        progressText: () => `${state.destroyedByName["木"] || 0}/3`,
+        check: () => (state.destroyedByName["木"] || 0) >= 3
       },
       {
         id: "destroyBomb",
@@ -6195,6 +6648,15 @@ createStaticBox(
         check: () => (state.cannonLaunchByName["ウサギ"] || 0) >= 3
       },
       {
+        id: "secretCannonOstrich3",
+        title: "ダチョウって空飛べたの？！",
+        desc: "大砲でダチョウを3回発射する",
+        reward: 2200,
+        hidden: true,
+        progressText: () => `${state.cannonLaunchByName["ダチョウ"] || 0}/3`,
+        check: () => (state.cannonLaunchByName["ダチョウ"] || 0) >= 3
+      },
+      {
         id: "secretLegendaryHuman3",
         title: "対人伝説ヘッド",
         desc: "伝説の剣パワー頭突きを人に3回当てる",
@@ -6220,6 +6682,15 @@ createStaticBox(
         hidden: true,
         progressText: () => `${state.legendaryPowerHeadbuttByName["ウサギ"] || 0}/3`,
         check: () => (state.legendaryPowerHeadbuttByName["ウサギ"] || 0) >= 3
+      },
+      {
+        id: "secretLegendaryOstrich3",
+        title: "伝説のダチョウアタック",
+        desc: "伝説の剣パワー頭突きをダチョウに3回当てる",
+        reward: 2600,
+        hidden: true,
+        progressText: () => `${state.legendaryPowerHeadbuttByName["ダチョウ"] || 0}/3`,
+        check: () => (state.legendaryPowerHeadbuttByName["ダチョウ"] || 0) >= 3
       },
       {
         id: "secretDestroyTitleSign",
@@ -6497,11 +6968,14 @@ createStaticBox(
         const dir = toTarget.normalize();
 
         // 速度を少し上げ、地面摩擦に負けないようにする
+        npc.ostrichBoostTimer = Math.max(0, (npc.ostrichBoostTimer || 0) - delta);
         const npcSpeed = npc.npcType === "rabbit"
           ? npc.speed * 1.55
           : npc.npcType === "dog"
             ? npc.speed * 1.25
-            : npc.speed * 1.15;
+            : npc.npcType === "ostrich"
+              ? npc.speed * ((npc.ostrichBoostTimer || 0) > 0 ? 7.0 : 1.35)
+              : npc.speed * 1.15;
 
         npc.body.velocity.x = dir.x * npcSpeed;
         npc.body.velocity.z = dir.z * npcSpeed;
@@ -6522,7 +6996,7 @@ createStaticBox(
         npc.body.velocity.y = Math.max(npc.body.velocity.y, -7);
 
         npc.visualYaw = Math.atan2(dir.x, dir.z);
-        npc.walkAnimTime += delta * (npc.npcType === "rabbit" ? 18 : (npc.npcType === "dog" ? 12 : 9));
+        npc.walkAnimTime += delta * (npc.npcType === "rabbit" ? 18 : (npc.npcType === "dog" ? 12 : (npc.npcType === "ostrich" ? 16 : 9)));
         npc.isWalking = true;
       }
     }
@@ -6600,6 +7074,22 @@ createStaticBox(
             );
           }
 
+          if (npc.npcType === "ostrich") {
+            // ダチョウ型：長い脚を大きく振って走る動き
+            const swing = Math.sin(t) * 0.95;
+            if (parts.leftLegPivot) parts.leftLegPivot.rotation.x = swing;
+            if (parts.rightLegPivot) parts.rightLegPivot.rotation.x = -swing;
+            if (parts.neck) parts.neck.rotation.x = -0.18 + Math.sin(t * 0.7) * 0.08;
+            if (parts.head) parts.head.position.y = 2.12 + Math.abs(Math.sin(t)) * 0.035;
+            if (parts.tail) parts.tail.rotation.x = -0.35 + Math.cos(t * 1.4) * 0.16;
+            const fast = (npc.ostrichBoostTimer || 0) > 0;
+            npc.mesh.scale.set(
+              1.0 + Math.sin(t) * 0.025,
+              1.0 + (fast ? 0.08 : 0.035) * Math.abs(Math.sin(t)),
+              1.0 + Math.cos(t) * 0.025
+            );
+          }
+
           if (npc.npcType === "rabbit") {
             // ウサギ型：高速でピョンピョン跳ねる動き
             const hop = Math.abs(Math.sin(t));
@@ -6669,6 +7159,14 @@ createStaticBox(
 
         if (obj.visualType === "titleSignBoard") {
           updateTitleSignVisual(obj, delta);
+        }
+
+        if (obj.visualType === "ostrichEgg") {
+          updateOstrichEggVisual(obj);
+        }
+
+        if (obj.visualType === "tree") {
+          updateTreeVisual(obj, delta);
         }
 
         if (obj.isLegendarySword && obj.mesh.userData) {
